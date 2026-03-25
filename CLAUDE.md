@@ -69,10 +69,24 @@ Only if there are no open PRs to maintain (or all are in a clean state), look fo
 
 Use `jira_search` with this JQL:
 ```
-project = RHCLOUD AND labels = platform-experience-services AND labels = hcc-ai-framework AND assignee is EMPTY ORDER BY priority DESC, created ASC
+project = RHCLOUD AND labels = platform-experience-services AND (labels = hcc-ai-framework OR labels = needs-investigation) AND assignee is EMPTY ORDER BY priority DESC, created ASC
 ```
 
-From the results, find the first ticket that has a label starting with `repo:`. The part after `repo:` must match a key in `project-repos.json`. If no matching ticket is found, output "NO_WORK_FOUND" and stop.
+From the results, find the first ticket that has a label starting with `repo:`. The part after `repo:` must match a key in `project-repos.json`. A ticket may have multiple `repo:` labels if it spans several repositories. All `repo:` labels must match keys in `project-repos.json`. If no matching ticket is found, output "NO_WORK_FOUND" and stop.
+
+#### Investigation tickets
+
+If the ticket has the label `needs-investigation`, do NOT implement anything. Instead:
+
+1. **Claim the ticket** (same as below — assign to yourself, move to "In Progress").
+2. **Read all referenced repos**: For each `repo:` label, `cd` into the repo and explore the relevant code paths mentioned in the ticket description.
+3. **Investigate**: Trace the issue across repos. Identify root causes, which files need changes, and in which repos.
+4. **Report findings**: Use `jira_add_comment` to post a detailed investigation summary:
+   - Root cause analysis
+   - Which repos and files need changes
+   - Suggested fix approach
+   - Any blockers or unknowns
+5. **Remove the `needs-investigation` label** from the ticket and stop. A human will review the findings and re-label with `hcc-ai-framework` if the bot should proceed with implementation.
 
 #### Implement the ticket
 
@@ -84,18 +98,23 @@ From the results, find the first ticket that has a label starting with `repo:`. 
 
 2. **Get details**: Use `jira_get_issue` to fetch the full ticket (title, description, acceptance criteria).
 
-3. **Prepare the repo**: Match the `repo:` label to `project-repos.json` to find the repo config. Each repo has:
+3. **Prepare the repos**: Collect all `repo:` labels from the ticket. For each one, match it to `project-repos.json` to find the repo config. Each repo has:
    - `url` — the git clone URL
-   - `persona` — the type of project (`frontend`, `backend`, etc.)
+   - `persona` — the type of project (`frontend`, `backend`, `operator`, `config`, etc.)
+   - `readonly` (optional) — if `true`, do not push or open PRs in this repo, only read it for context
 
    The repo name is derived from the URL (basename without `.git`). Repos are pre-cloned in `./repos/<repo-name>/` by `init.sh`.
 
+   For each non-readonly repo:
    - `cd` into the repo directory.
    - Fetch and checkout the default branch (usually `main` or `master`).
    - Pull latest changes.
    - Create and checkout a new branch: `bot/<TICKET-KEY>` (e.g. `bot/RHCLOUD-1234`). Always work on a branch, never commit directly to the default branch.
 
-4. **Load persona**: Read the persona from the repo's config in `project-repos.json`. Then read the persona-specific prompt from `personas/<persona>/prompt.md` and follow its guidelines during implementation.
+   For readonly repos:
+   - `cd` into the repo directory and pull latest changes. Use it for reading/debugging only.
+
+4. **Load personas**: For each repo, read the persona-specific prompt from `personas/<persona>/prompt.md` and follow its guidelines when working in that repo.
 
 5. **Implement**: Read the ticket description carefully. Work in the cloned repo directory to implement what's described. Follow existing code patterns and conventions in the repo.
 
@@ -125,7 +144,7 @@ From the results, find the first ticket that has a label starting with `repo:`. 
      Reorder addHook calls so VA is registered first.
      ```
 
-6. **Push and open PR**:
+6. **Push and open PRs**: For each non-readonly repo where you made changes:
    ```
    git push origin bot/<TICKET-KEY>
    ```
@@ -135,7 +154,9 @@ From the results, find the first ticket that has a label starting with `repo:`. 
    ```
    The PR title should match the commit title (under 50 chars). Include the ticket key and a summary of changes in the PR body.
 
-7. **Track the PR**: Add an entry to `state/open-prs.json` with the PR number, repo name, branch, and Jira ticket key.
+   For readonly repos: Do not push or open PRs. Instead, include the required config changes in the Jira comment so a human can apply them.
+
+7. **Track the PRs**: Add an entry to `state/open-prs.json` for each PR opened, with the PR number, repo name, branch, and Jira ticket key.
 
 8. **Report on Jira**: Use `jira_add_comment` to post a comment on the ticket with:
    - What you did

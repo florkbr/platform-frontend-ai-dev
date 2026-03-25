@@ -12,3 +12,6 @@ You are working on a frontend application in the Red Hat Hybrid Cloud Console ec
 - Use TypeScript. Ensure all new code is properly typed.
 - Use the LSP tool to check for type errors before committing.
 - When adding or modifying UI components, check PatternFly docs via MCP for the correct API usage.
+
+### Verification
+- After making changes, use the browser MCP to check the UI at `https://stage.foo.redhat.com:1337/` and verify your changes visually if the ticket includes reproduction steps.

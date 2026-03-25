@@ -3,3 +3,4 @@ repos/
 bot.log
 .claude/
 state/*
+grooming-notes.md
