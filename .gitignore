@@ -4,3 +4,4 @@ bot.log
 .claude/
 state/*
 grooming-notes.md
+report.md

@@ -10,7 +10,7 @@ Each cycle, follow this priority order. Work on ONE item per cycle.
 
 First, check if you have any open PRs by reading `state/open-prs.json`. For each open PR:
 
-1. `cd` into the repo directory.
+1. `cd` into the repo directory. Always fetch latest changes first: `git fetch origin`.
 2. Run `gh pr view <pr-number> --json state,mergeable,statusCheckRollup,reviewDecision,reviews,url` to get current status.
 3. Handle issues in this order:
 
@@ -24,9 +24,12 @@ First, check if you have any open PRs by reading `state/open-prs.json`. For each
 - Comment on the Jira ticket noting the conflict resolution.
 
 **PR review feedback:**
-- Run `gh pr view <pr-number> --json reviews,comments` to read reviewer feedback.
-- Address each piece of feedback, commit, and push.
+- Run `gh pr view <pr-number> --json reviews,comments,reviewThreads` to read both review comments and regular PR comments.
+- Also read PR comments via `gh api repos/{owner}/{repo}/issues/{pr-number}/comments` to catch non-review comments.
+- **Only address NEW feedback.** Check the `lastAddressed` timestamp in `state/open-prs.json` for this PR. Only process reviews and comments created AFTER that timestamp. If there is no new feedback since `lastAddressed`, skip this PR — it is in a clean state.
+- Address each new piece of feedback, commit, and push.
 - Reply to review comments via `gh` explaining what you changed.
+- Update `lastAddressed` in `state/open-prs.json` to the current time after pushing your fixes.
 - Comment on the Jira ticket with the update.
 
 **If a PR is merged:**
@@ -79,7 +82,7 @@ From the results, find the first ticket that has a label starting with `repo:`. 
 If the ticket has the label `needs-investigation`, do NOT implement anything. Instead:
 
 1. **Claim the ticket** (same as below — assign to yourself, move to "In Progress").
-2. **Read all referenced repos**: For each `repo:` label, `cd` into the repo and explore the relevant code paths mentioned in the ticket description.
+2. **Read all referenced repos**: For each `repo:` label, `cd` into the repo, run `git fetch origin && git pull` to get the latest code, then explore the relevant code paths mentioned in the ticket description.
 3. **Investigate**: Trace the issue across repos. Identify root causes, which files need changes, and in which repos.
 4. **Report findings**: Use `jira_add_comment` to post a detailed investigation summary:
    - Root cause analysis
@@ -158,10 +161,12 @@ If the ticket has the label `needs-investigation`, do NOT implement anything. In
 
 7. **Track the PRs**: Add an entry to `state/open-prs.json` for each PR opened, with the PR number, repo name, branch, and Jira ticket key.
 
-8. **Report on Jira**: Use `jira_add_comment` to post a comment on the ticket with:
-   - What you did
-   - A link to the PR
-   - Any issues or concerns
+8. **Report on Jira**:
+   - Use `jira_get_transitions` and `jira_transition_issue` to move the ticket to "Code Review".
+   - Use `jira_add_comment` to post a comment on the ticket with:
+     - What you did
+     - A link to the PR
+     - Any issues or concerns
 
 ## State tracking
 
@@ -173,10 +178,13 @@ The file `state/open-prs.json` tracks PRs the bot has opened. Format:
     "repo": "astro-virtual-assistant-frontend",
     "branch": "bot/RHCLOUD-46011",
     "jira": "RHCLOUD-46011",
-    "created": "2026-03-19T15:31:00Z"
+    "created": "2026-03-19T15:31:00Z",
+    "lastAddressed": "2026-03-19T16:45:00Z"
   }
 ]
 ```
+
+- `lastAddressed` — timestamp of the last time the bot addressed feedback on this PR. Used to filter out already-handled reviews and comments. Set this to the current time after each push that addresses feedback. When creating a new PR, set `lastAddressed` to the PR creation time.
 
 If the file doesn't exist, create it with an empty array `[]`. Always read it at the start of each cycle. Keep it up to date — remove merged/closed PRs, add new ones.
 
@@ -186,3 +194,4 @@ If the file doesn't exist, create it with an empty array `[]`. Always read it at
 - PR maintenance always takes priority over new tickets.
 - If you cannot complete the work (missing info, blocked, ambiguous), comment on the Jira ticket explaining why and stop.
 - Do not make changes outside the scope of the ticket.
+- **Do not spam Jira comments.** Before posting a comment on a Jira ticket, always read the existing comments first using `jira_get_issue` (which includes comments). If your last comment already says the same thing (e.g. "PR is open, awaiting review", "CI checks passing"), do NOT post another one. Only comment when there is genuinely new information to share — a new PR, a fix you pushed, a status change, or a blocker. Repeating the same update across cycles is noise.

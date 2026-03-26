@@ -4,7 +4,7 @@
     "labels": ["platform-experience-services", "hcc-ai-framework"]
   },
   "claude": {
-    "maxTurns": 50,
+    "maxTurns": 100,
     "model": "claude-opus-4-6"
   },
   "polling": {
