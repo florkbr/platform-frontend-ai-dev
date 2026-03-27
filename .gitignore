@@ -1,7 +1,10 @@
 repos/
+.credentials
+extensions/
 .lock
 bot.log
 .claude/
 state/*
 grooming-notes.md
 report.md
+.chrome-profile/

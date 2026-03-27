@@ -38,4 +38,23 @@ for REPO_KEY in $(jq -r 'keys[]' "$REPOS_MAP"); do
   log "Done: $REPO_KEY"
 done
 
-log "All repos cloned. Ready to run."
+log "All repos cloned."
+
+# Download BrowserMCP extension if not present
+EXTENSIONS_DIR="$SCRIPT_DIR/extensions"
+BROWSERMCP_DIR="$EXTENSIONS_DIR/browsermcp"
+
+if [ ! -d "$BROWSERMCP_DIR" ]; then
+  log "Downloading BrowserMCP extension..."
+  mkdir -p "$EXTENSIONS_DIR"
+  CRX_FILE="$EXTENSIONS_DIR/browsermcp.crx"
+  curl -L -o "$CRX_FILE" "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=131.0&acceptformat=crx2,crx3&x=id%3Dbjfgambnhccakkhmkepdoekmckoijdlc%26uc"
+  mkdir -p "$BROWSERMCP_DIR"
+  unzip -o "$CRX_FILE" -d "$BROWSERMCP_DIR" -x '_metadata/*'
+  rm -f "$CRX_FILE"
+  log "BrowserMCP extension downloaded and unpacked."
+else
+  log "BrowserMCP extension already present."
+fi
+
+log "Ready to run."

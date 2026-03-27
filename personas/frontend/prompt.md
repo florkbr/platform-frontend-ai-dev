@@ -15,19 +15,51 @@ You are working on a frontend application in the Red Hat Hybrid Cloud Console ec
 
 ### Verification for UI changes
 
-When the ticket involves visual/UI changes:
+When the ticket involves visual/UI changes, use the `chrome-devtools` MCP tools to verify your work. Chrome DevTools MCP connects to a pre-launched Chrome instance via remote debugging.
 
-1. **Start the dev server**: Run the project's dev server (usually `npm run start` or `npm run dev`). The app will be available at `https://stage.foo.redhat.com:1337/`.
+0. **Kill any stale dev server**: Before starting, ensure no leftover dev server is running from a previous cycle:
+   ```
+   lsof -ti :1337 | xargs kill 2>/dev/null || true
+   ```
 
-2. **Take a "before" screenshot**: Before your changes, use the browser MCP to navigate to the affected page and take a screenshot.
+1. **Start the dev server**: Run the dev server from the repo directory:
+   ```
+   node_modules/.bin/fec dev --clouddotEnv stage
+   ```
+   Run this in the background. The app will be available at `https://stage.foo.redhat.com:1337/`.
 
-3. **Take an "after" screenshot**: After your changes, restart the dev server if needed, navigate to the same page, and take another screenshot.
+   **Important**: The dev server proxies all requests to `console.stage.redhat.com`. The initial page load is very slow (2-3 minutes) because hundreds of federated module assets are fetched through the proxy without cache. Be patient — wait up to 3 minutes for the SPA to fully load.
 
-4. **Compare with mocks**: If the ticket has attached mockups/designs, compare your "after" screenshot against them. Make sure the implementation matches the design.
+2. **Navigate to the page**: Use the chrome-devtools MCP `navigate_page` tool to open the affected page URL.
 
-5. **Upload screenshots to the PR**: Attach the before/after screenshots to the pull request body or as a comment so reviewers can see the visual diff.
+3. **Handle SSO login**: The page will redirect to an SSO/Keycloak login page. This is a two-step login flow:
+   - Read the `.credentials` file in the dev-bot root directory to get `sso.username` and `sso.password`.
+   - Take a snapshot to find the username input field and "Next" button.
+   - Use `fill` to enter the username, then `click` the "Next" button.
+   - Wait for the password field to appear (use `wait_for` with text `["Password"]`).
+   - Use `fill` to enter the password, then `click` the "Log in" button.
+   - Wait for the redirect back to the app.
 
-6. **Stop the dev server** when done.
+4. **Wait for the SPA to load**: After login, the page takes a long time to load all federated modules. Be patient:
+   - Use `wait_for` with text like `["Hi!", "Welcome to", "Favorites"]` and a timeout of at least **180000ms** (3 minutes).
+   - If it times out, take a screenshot to check progress. If the page header is showing (Red Hat logo, user name), the chrome shell has loaded and the main content just needs more time.
+   - Take another screenshot or snapshot to confirm the dashboard has fully rendered before proceeding.
+
+5. **Take a "before" screenshot**: Before your changes, navigate to the affected page and take a screenshot.
+
+6. **Take an "after" screenshot**: After your changes, restart the dev server if needed, navigate to the same page, and take another screenshot.
+
+7. **Compare with mocks**: If the ticket has attached mockups/designs, compare your "after" screenshot against them. Make sure the implementation matches the design.
+
+8. **Upload screenshots to the PR**: Attach the before/after screenshots to the pull request body or as a comment so reviewers can see the visual diff.
+
+9. **Stop the dev server** when done. This is **mandatory** — never leave the dev server running after verification is complete:
+   ```
+   lsof -ti :1337 | xargs kill
+   ```
+   Verify it stopped: `lsof -ti :1337` should return nothing.
 
 ### Verification for non-UI changes
-- Use the browser MCP to check the UI at `https://stage.foo.redhat.com:1337/` and verify your changes don't break anything visually if the ticket includes reproduction steps.
+- Before starting the dev server, kill any stale instances: `lsof -ti :1337 | xargs kill 2>/dev/null || true`
+- Use chrome-devtools MCP to check the UI at `https://stage.foo.redhat.com:1337/` and verify your changes don't break anything visually if the ticket includes reproduction steps.
+- **Always stop the dev server** after verification: `lsof -ti :1337 | xargs kill`
