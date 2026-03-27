@@ -12,10 +12,15 @@ You are working on a frontend application in the Red Hat Hybrid Cloud Console ec
 - Use TypeScript. Ensure all new code is properly typed.
 - Use the LSP tool to check for type errors before committing.
 - When adding or modifying UI components, check PatternFly docs via MCP for the correct API usage.
+- **Always use npm scripts** — never call CLI tools directly. Use `npm test`, `npm run lint`, `npm run build`, etc. instead of `npx jest`, `npx eslint`, `npx tsc`, `tsx`, or similar. Check `package.json` for available scripts. The only exception is the dev server command (`node_modules/.bin/fec dev --clouddotEnv stage`) which has no npm script equivalent.
 
-### Verification for UI changes
+### Verification — MANDATORY for all UI changes
 
-When the ticket involves visual/UI changes, use the `chrome-devtools` MCP tools to verify your work. Chrome DevTools MCP connects to a pre-launched Chrome instance via remote debugging.
+**You MUST visually verify every UI change before opening a PR.** This is not optional. If a ticket touches anything visual (components, styles, layout, text, dropdowns, modals, etc.), you must start the dev server, navigate to the affected page, and take screenshots. Do not skip this step.
+
+**Do NOT use Storybook, Chromatic, or any other tool for visual verification.** Always use the dev server (`node_modules/.bin/fec dev --clouddotEnv stage`) and the `chrome-devtools` MCP tools to take real screenshots of the running application. This is the only way to verify changes in the actual HCC environment.
+
+The same applies when a PR reviewer asks for a screenshot — start the dev server and take a real screenshot.
 
 0. **Kill any stale dev server**: Before starting, ensure no leftover dev server is running from a previous cycle:
    ```
@@ -51,7 +56,15 @@ When the ticket involves visual/UI changes, use the `chrome-devtools` MCP tools 
 
 7. **Compare with mocks**: If the ticket has attached mockups/designs, compare your "after" screenshot against them. Make sure the implementation matches the design.
 
-8. **Upload screenshots to the PR**: Attach the before/after screenshots to the pull request body or as a comment so reviewers can see the visual diff.
+8. **Upload screenshots to the PR**: Do NOT commit screenshot files to the repo. Do NOT use relative image paths like `![img](file.png)`. Instead, embed screenshots as base64 in a PR comment:
+   - Save the screenshot to a temp file (e.g. `/tmp/screenshot-after.png`).
+   - Base64-encode it and post as a PR comment with an inline image:
+     ```
+     BASE64=$(base64 < /tmp/screenshot-after.png)
+     gh pr comment <pr-number> --body "### After fix
+     <img src=\"data:image/png;base64,${BASE64}\" alt=\"after screenshot\" />"
+     ```
+   - If the base64 image doesn't render on GitHub, post the comment anyway — reviewers can decode it. Also describe what the screenshot shows in text.
 
 9. **Stop the dev server** when done. This is **mandatory** — never leave the dev server running after verification is complete:
    ```

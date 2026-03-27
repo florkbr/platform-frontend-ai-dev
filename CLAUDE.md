@@ -28,6 +28,7 @@ First, check if you have any open PRs by reading `state/open-prs.json`. For each
 - Also read PR comments via `gh api repos/{owner}/{repo}/issues/{pr-number}/comments` to catch non-review comments.
 - **Only address NEW feedback.** Check the `lastAddressed` timestamp in `state/open-prs.json` for this PR. Only process reviews and comments created AFTER that timestamp. If there is no new feedback since `lastAddressed`, skip this PR — it is in a clean state.
 - Address each new piece of feedback, commit, and push.
+- If a reviewer asks for a screenshot or visual proof, follow the **Verification for UI changes** steps in the persona prompt: start the dev server (`node_modules/.bin/fec dev --clouddotEnv stage`), navigate to the relevant page using chrome-devtools MCP, take a screenshot, commit it, and share the raw GitHub URL. Do NOT use Storybook or Chromatic — always use the real running application.
 - Reply to review comments via `gh` explaining what you changed.
 - Update `lastAddressed` in `state/open-prs.json` to the current time after pushing your fixes.
 - Comment on the Jira ticket with the update.
@@ -129,13 +130,18 @@ If the ticket has the label `needs-investigation`, do NOT implement anything. In
      - Use `go_to_definition` to trace code paths and understand implementations.
      - Use `find_references` to check what depends on code you're changing.
      - Always run diagnostics on files you've edited before committing to catch type errors.
+   - **Always use npm scripts** instead of calling CLI tools directly. Check `package.json` for available scripts and use them:
+     - `npm test` or `npm run test` instead of `npx jest` or `npx vitest`
+     - `npm run lint` instead of `npx eslint`
+     - `npm run build` or `npm run typecheck` instead of `npx tsc`
+     - Never call `npx`, `tsx`, `tsc`, `jest`, `vitest`, `eslint`, or other CLIs directly. Always go through npm scripts.
    - **Testing is mandatory, not optional.**
-     - First, find the test framework used in the repo (look for `jest.config`, `vitest.config`, test directories, etc.).
+     - Check `package.json` for test scripts (e.g. `npm test`, `npm run test:ct`).
      - Run the existing test suite to make sure your changes don't break anything. If tests fail, fix them before proceeding.
      - Find tests related to the code you changed. If tests exist for the files/components you modified, run them specifically and make sure they pass.
      - If there are NO existing tests covering the code you changed, you MUST write new tests. Follow the test patterns, naming conventions, and framework already used in the repo. Do not skip this step.
      - Run your new tests and verify they pass before committing.
-   - Run linting if configured.
+   - Run linting via npm scripts (e.g. `npm run lint`).
    - Use conventional commits: `type(scope): short description`
    - Keep commit titles under 50 characters. This is critical — GitHub and PR titles truncate after ~50-72 chars.
    - Put the ticket key and details in the commit body, not the title.
@@ -147,7 +153,9 @@ If the ticket has the label `needs-investigation`, do NOT implement anything. In
      Reorder addHook calls so VA is registered first.
      ```
 
-6. **Push and open PRs**: For each non-readonly repo where you made changes:
+6. **Visually verify UI changes**: If the ticket involves any visual/UI change (components, styles, text, dropdowns, layout, etc.), you MUST follow the "Verification" section in the persona prompt BEFORE opening a PR. This means starting the dev server, navigating to the affected page with chrome-devtools MCP, and taking before/after screenshots. Do not skip this step — PRs without visual verification will be rejected.
+
+7. **Push and open PRs**: For each non-readonly repo where you made changes:
    ```
    git push origin bot/<TICKET-KEY>
    ```
@@ -159,9 +167,9 @@ If the ticket has the label `needs-investigation`, do NOT implement anything. In
 
    For readonly repos: Do not push or open PRs. Instead, include the required config changes in the Jira comment so a human can apply them.
 
-7. **Track the PRs**: Add an entry to `state/open-prs.json` for each PR opened, with the PR number, repo name, branch, and Jira ticket key.
+8. **Track the PRs**: Add an entry to `state/open-prs.json` for each PR opened, with the PR number, repo name, branch, and Jira ticket key.
 
-8. **Report on Jira**:
+9. **Report on Jira**:
    - Use `jira_get_transitions` and `jira_transition_issue` to move the ticket to "Code Review".
    - Use `jira_add_comment` to post a comment on the ticket with:
      - What you did
