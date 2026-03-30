@@ -58,11 +58,15 @@ If none of these apply (all tasks are in a clean state with no pending feedback 
 For each task with status `pr_open` or `pr_changes`:
 
 1. `cd` into the repo directory. Always fetch latest changes first: `git fetch origin`.
-2. Run `gh pr view <pr-number> --json state,mergeable,statusCheckRollup,reviewDecision,reviews,url` to get current status.
-3. Handle issues in this order:
+2. Determine whether this is a **GitHub** or **GitLab** repo by checking the `host` field in `project-repos.json`. Use `gh` for GitHub repos and `glab` for GitLab repos throughout.
+3. Get current PR/MR status:
+   - **GitHub**: `gh pr view <pr-number> --json state,mergeable,statusCheckRollup,reviewDecision,reviews,url`
+   - **GitLab**: `glab mr view <mr-number>`
+4. Handle issues in this order:
 
 **Failing CI checks:**
-- Run `gh pr checks <pr-number>` to see which checks failed.
+- **GitHub**: Run `gh pr checks <pr-number>` to see which checks failed.
+- **GitLab**: Run `glab mr view <mr-number>` and check pipeline status. Use `glab ci view` to see failed jobs.
 - Checkout the branch, investigate the failure, fix it, commit, and push.
 - Update the Jira ticket with a comment about what you fixed.
 - Use `task_update` to set `last_addressed` to current time.
@@ -72,13 +76,13 @@ For each task with status `pr_open` or `pr_changes`:
 - Comment on the Jira ticket noting the conflict resolution.
 - Use `task_update` to set `last_addressed` to current time.
 
-**PR review feedback (GitHub):**
-- Run `gh pr view <pr-number> --json reviews,comments,reviewThreads` to read both review comments and regular PR comments.
-- Also read PR comments via `gh api repos/{owner}/{repo}/issues/{pr-number}/comments` to catch non-review comments.
-- **Only address NEW feedback.** Use `task_get` to check `last_addressed` for this task. Only process reviews and comments created AFTER that timestamp. If there is no new feedback since `last_addressed`, skip this PR feedback check — it is in a clean state.
+**PR/MR review feedback:**
+- **GitHub**: Run `gh pr view <pr-number> --json reviews,comments,reviewThreads` to read review comments. Also read PR comments via `gh api repos/{owner}/{repo}/issues/{pr-number}/comments`.
+- **GitLab**: Run `glab mr view <mr-number> --comments` to read MR comments and review notes.
+- **Only address NEW feedback.** Use `task_get` to check `last_addressed` for this task. Only process reviews and comments created AFTER that timestamp. If there is no new feedback since `last_addressed`, skip this check — it is in a clean state.
 - Address each new piece of feedback, commit, and push.
-- If a reviewer asks for a screenshot or visual proof, follow the **Verification for UI changes** steps in the persona prompt: start the dev server (`node_modules/.bin/fec dev --clouddotEnv stage`), navigate to the relevant page using chrome-devtools MCP, and take a screenshot. **Never commit screenshots to the repo.** Encode the image as base64 (`base64 -i screenshot.png`) and embed it in the PR comment as `<img src="data:image/png;base64,..." alt="Screenshot" />`. Do NOT use Storybook or Chromatic — always use the real running application.
-- Reply to review comments via `gh` explaining what you changed.
+- If a reviewer asks for a screenshot or visual proof, follow the **Verification for UI changes** steps in the persona prompt: start the dev server (`node_modules/.bin/fec dev --clouddotEnv stage`), navigate to the relevant page using chrome-devtools MCP, and take a screenshot. **Never commit screenshots to the repo.** Encode the image as base64 (`base64 -i screenshot.png`) and embed it in the PR/MR comment as `<img src="data:image/png;base64,..." alt="Screenshot" />`. Do NOT use Storybook or Chromatic — always use the real running application.
+- Reply to review comments via `gh`/`glab` explaining what you changed.
 - Use `task_update` to set `last_addressed` to the current time after pushing your fixes.
 - Use `memory_store` to save any notable feedback as `review_feedback` with relevant tags (e.g. `css`, `testing`, `patternfly`).
 - Comment on the Jira ticket with the update.
@@ -86,7 +90,7 @@ For each task with status `pr_open` or `pr_changes`:
 **Jira comments:**
 - Use `jira_get_issue` to fetch the ticket (including comments) for the task's `jira_key`.
 - Check for new comments created AFTER the task's `last_addressed` timestamp. Ignore comments posted by the bot itself.
-- New Jira comments may contain additional requirements, questions, or feedback from stakeholders who don't use GitHub. Treat them with the same priority as PR review feedback.
+- New Jira comments may contain additional requirements, questions, or feedback from stakeholders who don't use GitHub/GitLab. Treat them with the same priority as PR/MR review feedback.
 - If a Jira comment asks a question: reply via `jira_add_comment` with the answer.
 - If a Jira comment requests a change: implement it, commit, push, and reply on Jira confirming the change.
 - If a Jira comment provides context or updated requirements: incorporate them into the current work.
@@ -116,9 +120,8 @@ project = RHCLOUD AND labels = PRIMARY_LABEL AND assignee = currentUser() AND st
 
 For each ticket found:
 1. **Check for merged PRs**: If the ticket has an associated repo (from `repo:` label), `cd` into the repo and check if the bot's branch was merged:
-   ```
-   gh pr list --head bot/<TICKET-KEY> --state merged
-   ```
+   - **GitHub**: `gh pr list --head bot/<TICKET-KEY> --state merged`
+   - **GitLab**: `glab mr list --source-branch bot/<TICKET-KEY> --merged`
    If the PR was merged:
    - Use `jira_get_transitions` and `jira_transition_issue` to move the ticket to "Done".
    - Use `jira_add_comment` to note the PR was merged and the ticket is complete.
@@ -187,20 +190,40 @@ If the ticket has the label `needs-investigation`, do NOT implement anything. In
 5. **Prepare the repos**: Collect all `repo:` labels from the ticket. For each one, match it to `project-repos.json` to find the repo config. Each repo has:
    - `url` — the git clone URL
    - `persona` — the type of project (`frontend`, `backend`, `operator`, `config`, etc.)
+   - `host` (optional) — `"gitlab"` for GitLab repos. If absent, the repo is on GitHub.
    - `readonly` (optional) — if `true`, do not push or open PRs in this repo, only read it for context
 
-   The repo name is derived from the URL (basename without `.git`). Repos are pre-cloned in `./repos/<repo-name>/` by `init.sh`.
+   The repo name is derived from the URL (basename without `.git`). The repo directory is `./repos/<repo-name>/`.
+
+   **Clone on demand**: Check if the repo directory exists. If it does NOT exist, clone it:
+   ```
+   git clone <url> ./repos/<repo-name>/
+   ```
+   If cloning fails (network error, SSH key issue, etc.), report the failure on the Jira ticket and stop — do not proceed without the repo.
 
    For each non-readonly repo:
    - `cd` into the repo directory.
-   - Fetch and checkout the default branch (usually `main` or `master`).
+   - Run `git fetch origin` and checkout the default branch (usually `main` or `master`).
    - Pull latest changes.
    - Create and checkout a new branch: `bot/<TICKET-KEY>` (e.g. `bot/RHCLOUD-1234`). Always work on a branch, never commit directly to the default branch.
 
    For readonly repos:
-   - `cd` into the repo directory and pull latest changes. Use it for reading/debugging only.
+   - `cd` into the repo directory. Run `git fetch origin` and pull latest changes. Use it for reading/debugging only.
 
-6. **Load personas**: For each repo, read the persona-specific prompt from `personas/<persona>/prompt.md` and follow its guidelines when working in that repo.
+   **Read repo-level instructions**: After entering each repo, check if it contains a `CLAUDE.md` file at its root. If it does, read it in full. If that file references other instruction files (e.g. `@AGENTS.md`), read those too. These contain critical repo-specific architectural guidance, coding standards, and constraints. Follow them alongside the persona guidelines. **When repo-level instructions conflict with persona guidelines, the repo-level instructions take precedence** — they are written by the repo maintainers and reflect the ground truth for that codebase.
+
+6. **Load personas**: Collect all unique persona values from the repos involved in this ticket (from `project-repos.json`). For each unique persona, read `personas/<persona>/prompt.md`. If a ticket spans multiple repos with different personas (e.g. a `frontend` repo and a `backend` repo), load ALL persona prompts upfront so you understand the full scope of the work.
+
+   **Persona scoping**: Each persona's guidelines apply ONLY when working in repos of that persona type. For example:
+   - Frontend persona rules (PatternFly, visual verification, `npm run lint`) apply in repos with `"persona": "frontend"`.
+   - Backend persona rules apply in repos with `"persona": "backend"`.
+   - Do NOT apply frontend-specific rules (e.g. visual verification) to backend repos, or vice versa.
+
+   **Cross-repo coordination**: When a ticket requires changes across multiple repos, plan the work holistically before starting:
+   - Identify which changes go in which repo.
+   - Determine if there are dependencies between repos (e.g. a backend API change that a frontend repo consumes).
+   - Implement in dependency order: upstream changes first (e.g. backend API), then downstream consumers (e.g. frontend).
+   - Reference the cross-repo relationship in commit messages and the PR description so reviewers understand the full picture.
 
 7. **Implement**: Read the ticket description carefully. Work in the cloned repo directory to implement what's described. Follow existing code patterns and conventions in the repo.
 
@@ -243,13 +266,22 @@ If the ticket has the label `needs-investigation`, do NOT implement anything. In
    ```
    git push origin bot/<TICKET-KEY>
    ```
-   Open a pull request using `gh`:
+
+   Open a pull/merge request. Check the repo's `host` field in `project-repos.json`:
+
+   **GitHub repos** (no `host` field or `host` is not `"gitlab"`):
    ```
    gh pr create --title "<commit title>" --body "<ticket key and description>"
    ```
-   The PR title should match the commit title (under 50 chars). Include the ticket key and a summary of changes in the PR body.
 
-   For readonly repos: Do not push or open PRs. Instead, include the required config changes in the Jira comment so a human can apply them.
+   **GitLab repos** (`"host": "gitlab"`):
+   ```
+   glab mr create --title "<commit title>" --description "<ticket key and description>"
+   ```
+
+   The PR/MR title should match the commit title (under 50 chars). Include the ticket key and a summary of changes in the body.
+
+   For readonly repos: Do not push or open PRs/MRs. Instead, include the required config changes in the Jira comment so a human can apply them.
 
 11. **Track the PRs**: Use `task_update` to set `status` to `pr_open`, `pr_number`, `pr_url`, `summary` ("PR #N opened, awaiting review"), `metadata` (`{"last_step": "pr_opened", "files_changed": [...], "commits": [...]}`), and `last_addressed` to the current time.
 

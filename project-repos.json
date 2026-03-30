@@ -22,7 +22,7 @@
   "app-interface": {
     "url": "git@gitlab.cee.redhat.com:service/app-interface.git",
     "persona": "config",
-    "readonly": true
+    "host": "gitlab"
   },
   "quickstarts": {
     "url": "git@github.com:RedHatInsights/quickstarts.git",

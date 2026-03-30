@@ -37,6 +37,19 @@ async def api_tasks(request: Request) -> JSONResponse:
     })
 
 
+async def api_task_delete(request: Request) -> JSONResponse:
+    """Delete a task by jira_key."""
+    pool = get_pool()
+    jira_key = request.path_params.get("jira_key")
+    if not jira_key:
+        return JSONResponse({"error": "missing jira_key"}, status_code=400)
+    result = await pool.execute("DELETE FROM tasks WHERE jira_key = $1", jira_key)
+    if result == "DELETE 0":
+        return JSONResponse({"error": f"Task {jira_key} not found"}, status_code=404)
+    await bus.publish(Event("task_removed", {"jira_key": jira_key}))
+    return JSONResponse({"deleted": True, "jira_key": jira_key})
+
+
 async def api_memories(request: Request) -> JSONResponse:
     pool = get_pool()
     category = request.query_params.get("category")

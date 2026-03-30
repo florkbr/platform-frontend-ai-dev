@@ -279,8 +279,23 @@ function showTaskDetail(t) {
       <div class="detail-section-label">Metadata</div>
       <div class="detail-content" style="font-family:monospace;font-size:12px">${esc(JSON.stringify(t.metadata, null, 2))}</div>
     </div>` : ''}
+    <div class="detail-actions">
+      <button class="btn-delete" onclick="deleteTask('${t.jira_key}')">Remove task</button>
+    </div>
   `;
 }
+
+window.deleteTask = async function(jiraKey) {
+  if (!confirm('Remove task ' + jiraKey + '?')) return;
+  const res = await fetch(API + '/api/tasks/' + encodeURIComponent(jiraKey), { method: 'DELETE' });
+  if (res.ok) {
+    closeDetail('task-detail', 'tasks-split');
+    loadTasks();
+    loadStats();
+  } else {
+    alert('Failed to remove task');
+  }
+};
 
 document.getElementById('task-status-filter').addEventListener('change', () => { loadTasks(0); updateHash(); });
 

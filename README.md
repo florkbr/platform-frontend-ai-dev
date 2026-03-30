@@ -88,7 +88,7 @@ For UI changes, the bot starts the dev server, navigates to the affected page us
 ```
 dev-bot/
   run.sh                 # Polling loop — launches Claude CLI each cycle
-  init.sh                # Clones repos, installs LSP, starts memory server
+  init.sh                # Installs LSP, starts memory server
   config.json            # Model, polling intervals, Jira config
   project-repos.json     # repo label -> git URL + persona mapping
   CLAUDE.md              # Full agent instructions (the bot's brain)
@@ -106,13 +106,14 @@ dev-bot/
     operator/            # Kubernetes operator guidelines
     config/              # Config repo guidelines
     cve/                 # CVE remediation guidelines
-  repos/                 # Cloned target repos (created by init.sh)
+  repos/                 # Cloned target repos (created on demand by the bot)
 ```
 
 ## Prerequisites
 
 - [Claude Code](https://claude.ai/code) installed and authenticated
 - `gh` CLI authenticated with GitHub
+- `glab` CLI authenticated with GitLab (for GitLab repos like app-interface)
 - SSH access to target repos
 - Docker (for the memory server)
 - Jira MCP server configured (`mcp-atlassian`)
@@ -122,7 +123,7 @@ dev-bot/
 ## Setup
 
 ```bash
-# Clone and initialize (clones all repos, starts memory server)
+# Initialize (installs LSP, starts memory server)
 ./init.sh
 
 # Run the bot for a specific team
@@ -139,7 +140,8 @@ dev-bot/
    }
    ```
 2. Add a `repo:my-repo` label to the Jira ticket
-3. Run `./init.sh` to clone it
+
+The bot will clone the repo automatically when it picks up a ticket with that label.
 
 ## Running everything
 
@@ -194,7 +196,7 @@ If you're using Chromium instead of Chrome, edit `start-chromium.sh` and replace
 ### 3. Run the bot
 
 ```bash
-# Full init first (clones repos, installs LSP, starts memory server)
+# Full init first (installs LSP, starts memory server)
 ./init.sh
 
 # Start the polling loop for a specific team
