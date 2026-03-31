@@ -20,7 +20,8 @@
     "persona": "operator"
   },
   "app-interface": {
-    "url": "git@gitlab.cee.redhat.com:service/app-interface.git",
+    "url": "git@gitlab.cee.redhat.com:mmarosi/app-interface.git",
+    "upstream": "git@gitlab.cee.redhat.com:service/app-interface.git",
     "persona": "config",
     "host": "gitlab"
   },

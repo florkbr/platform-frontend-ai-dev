@@ -61,8 +61,8 @@ For each task with status `pr_open` or `pr_changes`:
 
 A task may have PRs/MRs across multiple repos (check `metadata.prs`). If `metadata.prs` is set, iterate over each PR entry. Otherwise, use the single `repo`/`pr_number`/`pr_url` fields. For each PR/MR:
 
-1. `cd` into the repo directory. Always fetch latest changes first: `git fetch origin`.
-2. Determine whether this is a **GitHub** or **GitLab** repo by checking the `host` field in `project-repos.json` (or `metadata.prs[].host`). Use `gh` for GitHub repos and `glab` for GitLab repos throughout.
+1. `cd` into the repo directory. Always fetch latest changes first: `git fetch origin`. If the repo has an `upstream` remote (fork workflow), also run `git fetch upstream`.
+2. Determine whether this is a **GitHub** or **GitLab** repo by checking the `host` field in `project-repos.json` (or `metadata.prs[].host`). Use `gh` for GitHub repos and `glab` for GitLab repos throughout. **Fork repos**: If the repo has an `upstream` field in `project-repos.json`, all `glab mr` commands must include `--repo <upstream-project-path>` to target the upstream repo where the MR was opened.
 3. Get current PR/MR status:
    - **GitHub**: `gh pr view <pr-number> --json state,mergeable,statusCheckRollup,reviewDecision,reviews,url`
    - **GitLab**: `glab mr view <mr-number>`
@@ -157,7 +157,25 @@ Use `jira_search` with this JQL:
 project = RHCLOUD AND labels = PRIMARY_LABEL AND assignee is EMPTY AND (status != Done) ORDER BY priority DESC, created ASC
 ```
 
-From the results, find the first ticket that has a label starting with `repo:`. The part after `repo:` must match a key in `project-repos.json`. A ticket may have multiple `repo:` labels if it spans several repositories. All `repo:` labels must match keys in `project-repos.json`. If no matching ticket is found, output "NO_WORK_FOUND" and stop.
+From the results, find the first ticket that has a label starting with `repo:`. The part after `repo:` must match a key in `project-repos.json`. A ticket may have multiple `repo:` labels if it spans several repositories. All `repo:` labels must match keys in `project-repos.json`. If no matching ticket is found, do a **memory housekeeping** pass (see below), then output "NO_WORK_FOUND" and stop.
+
+#### Memory housekeeping (idle time)
+
+When there is no new work, spend a small amount of time consolidating memories. This keeps the knowledge base clean and useful. Do NOT spend more than a few minutes on this — process **3-5 memories** at most per cycle.
+
+1. Use `memory_list` with `limit=10` to get recent memories.
+2. For each memory, run `memory_search` with its title/content as the query. Look at the results for high-similarity matches (> 80%).
+3. If you find duplicates or near-duplicates (same lesson learned from different tickets, same codebase pattern described slightly differently):
+   - Write a single consolidated memory that combines the insights into a more general, reusable form. Keep it concise. Preserve the most useful details from each source.
+   - Set `repo` if all sources are from the same repo. If they span repos, omit `repo` to make it a cross-repo learning.
+   - Merge tags from all sources.
+   - Use `memory_store` to save the consolidated memory.
+   - Use `memory_delete` to remove the originals that were merged.
+4. If no duplicates are found, skip — the memory is fine as-is.
+
+**Examples of consolidation:**
+- Three memories all saying "PatternFly SelectOption needs children prop in PF6" from different tickets → one memory: "PF6 migration: SelectOption requires children prop instead of value prop for display text. Affects all dropdown/select components."
+- Two memories about the same repo's test patterns → one memory: "notifications-frontend: tests use React Testing Library with custom render wrapper from testUtils.ts. Always use `screen.getByRole` over `getByTestId`."
 
 #### Investigation tickets
 
@@ -224,7 +242,8 @@ Before starting work on a ticket, use `jira_get_issue` to read the full ticket i
    - Past solutions to similar problems — reuse approaches that worked before.
 
 5. **Prepare the repos**: Collect all `repo:` labels from the ticket. For each one, match it to `project-repos.json` to find the repo config. Each repo has:
-   - `url` — the git clone URL
+   - `url` — the git clone URL (may be a fork — see `upstream` below)
+   - `upstream` (optional) — the upstream repo URL. When present, `url` is a **fork** and `upstream` is the original repo. The bot clones from `url`, syncs from `upstream`, and opens MRs targeting the upstream repo.
    - `persona` — the type of project (`frontend`, `backend`, `operator`, `config`, etc.)
    - `host` (optional) — `"gitlab"` for GitLab repos. If absent, the repo is on GitHub.
    - `readonly` (optional) — if `true`, do not push or open PRs in this repo, only read it for context
@@ -235,12 +254,22 @@ Before starting work on a ticket, use `jira_get_issue` to read the full ticket i
    ```
    git clone <url> ./repos/<repo-name>/
    ```
+   If the repo has an `upstream` field, add the upstream remote immediately after cloning:
+   ```
+   cd ./repos/<repo-name>/
+   git remote add upstream <upstream-url>
+   ```
    If cloning fails (network error, SSH key issue, etc.), report the failure on the Jira ticket and stop — do not proceed without the repo.
 
    For each non-readonly repo:
    - `cd` into the repo directory.
-   - Run `git fetch origin` and checkout the default branch (usually `main` or `master`).
-   - Pull latest changes.
+   - If the repo has an `upstream` field (fork workflow):
+     - Run `git fetch upstream` to get the latest from the upstream repo.
+     - Checkout the default branch and reset it to upstream: `git checkout master && git reset --hard upstream/master` (or `main` — use whichever the upstream uses).
+     - This ensures your branch is always based on the latest upstream code, not a stale fork.
+   - Otherwise (direct repo):
+     - Run `git fetch origin` and checkout the default branch (usually `main` or `master`).
+     - Pull latest changes.
    - Create and checkout a new branch: `bot/<TICKET-KEY>` (e.g. `bot/RHCLOUD-1234`). Always work on a branch, never commit directly to the default branch.
 
    For readonly repos:
@@ -311,6 +340,14 @@ Before starting work on a ticket, use `jira_get_issue` to read the full ticket i
    ```
 
    **GitLab repos** (`"host": "gitlab"`):
+
+   If the repo has an `upstream` field (fork workflow), the MR must target the upstream repo, not the fork. Extract the upstream project path from the `upstream` URL and use `--repo` to target it:
+   ```
+   glab mr create --repo <upstream-project-path> --title "<commit title>" --description "<ticket key and description>"
+   ```
+   For example, if `upstream` is `git@gitlab.cee.redhat.com:service/app-interface.git`, use `--repo service/app-interface`.
+
+   If no `upstream` (direct repo):
    ```
    glab mr create --title "<commit title>" --description "<ticket key and description>"
    ```

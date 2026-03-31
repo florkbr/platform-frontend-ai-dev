@@ -31,7 +31,7 @@ Figure out which repo(s) are involved. The bot can only work on repos listed in 
 | `astro-virtual-assistant-v2` | backend | Virtual assistant backend |
 | `payload-tracker-frontend` | cve | Payload tracker UI |
 | `pdf-generator` | cve | PDF generation service |
-| `app-interface` | config | App-interface (GitLab — bot opens MRs via glab) |
+| `app-interface` | config | App-interface (GitLab fork — bot opens MRs against upstream via glab) |
 
 Help the user identify the right repo(s). Ask about:
 - Which page/URL is affected? (can narrow down the frontend repo)

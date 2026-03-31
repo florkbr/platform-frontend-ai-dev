@@ -143,6 +143,21 @@ dev-bot/
 
 The bot will clone the repo automatically when it picks up a ticket with that label.
 
+### Fork repos
+
+If the bot doesn't have push access to the upstream repo, use a fork. Set `url` to the fork and add an `upstream` field pointing to the original:
+
+```json
+"app-interface": {
+  "url": "git@gitlab.cee.redhat.com:mmarosi/app-interface.git",
+  "upstream": "git@gitlab.cee.redhat.com:service/app-interface.git",
+  "persona": "config",
+  "host": "gitlab"
+}
+```
+
+The bot will clone from the fork, sync from upstream, push branches to the fork, and open MRs targeting the upstream repo.
+
 ## Running everything
 
 ### 1. Memory server + dashboard
