@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-COSTS_API = "http://localhost:8080/api/costs"
+COSTS_API = os.environ.get("COSTS_API_URL", "http://localhost:8080/api/costs")
 
 
 def _build_entry(label: str, result, ctx: CycleContext | None = None) -> dict:

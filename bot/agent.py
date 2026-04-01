@@ -1,7 +1,8 @@
 """Core agent cycle — invokes Claude Agent SDK."""
 
 import logging
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass
 
 import httpx
 from claude_agent_sdk import (
@@ -17,7 +18,7 @@ from .config import Config
 
 logger = logging.getLogger(__name__)
 
-DASHBOARD_URL = "http://localhost:8080/api/bot-status"
+DASHBOARD_URL = os.environ.get("BOT_DASHBOARD_URL", "http://localhost:8080/api/bot-status")
 
 
 @dataclass
