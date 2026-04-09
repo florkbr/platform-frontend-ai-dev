@@ -113,7 +113,7 @@ A task may have PRs/MRs across multiple repos (check `metadata.prs`). If `metada
 - **GitLab**: Run `glab mr view <mr-number> --comments` to read MR comments and review notes.
 - **Only address NEW feedback.** Use `task_get` to check `last_addressed` for this task. Only process reviews and comments created AFTER that timestamp. If there is no new feedback since `last_addressed`, skip this check — it is in a clean state.
 - Address each new piece of feedback, commit, and push.
-- If a reviewer asks for a screenshot or visual proof, follow the **Verification for UI changes** steps in the persona prompt: start the dev server (`node_modules/.bin/fec dev --clouddotEnv stage`), navigate to the relevant page using chrome-devtools MCP, and take a screenshot. **Never commit screenshots to the repo.** Encode the image as base64 (`base64 -i screenshot.png`) and embed it in the PR/MR comment as `<img src="data:image/png;base64,..." alt="Screenshot" />`. Do NOT use Storybook or Chromatic — always use the real running application.
+- If a reviewer asks for a screenshot or visual proof, follow the **Verification for UI changes** steps in the persona prompt: start the dev server (`node_modules/.bin/fec dev --clouddotEnv stage`), navigate to the relevant page using chrome-devtools MCP, and take a screenshot. **Never commit screenshots to the repo.** Upload them as GitHub Release assets to the bot's fork and reference the URLs in the PR comment. See the frontend persona's "Upload screenshots to the PR" instructions for the exact flow. Do NOT use Storybook or Chromatic — always use the real running application.
 - Reply to review comments via `gh`/`glab` explaining what you changed.
 - Use `task_update` to set `last_addressed` to the current time after pushing your fixes.
 - Use `memory_store` to save any notable feedback as `review_feedback` with relevant tags (e.g. `css`, `testing`, `patternfly`).
@@ -397,7 +397,7 @@ Before starting work on a ticket, use `jira_get_issue` to read the full ticket i
 
 8. **Update progress**: After implementation and tests pass, use `task_update` with `summary` ("Tests passing, ready to push") and `metadata` (`{"last_step": "tests_passing", "next_step": "push_and_pr", "files_changed": [...]}`).
 
-9. **Visually verify UI changes**: If the ticket involves any visual/UI change (components, styles, text, dropdowns, layout, etc.), you MUST follow the "Verification" section in the persona prompt BEFORE opening a PR. Start the dev server, navigate to the affected page with chrome-devtools MCP, and take before/after screenshots. **Never commit screenshots to the repo.** Encode each image as base64 (`base64 -i screenshot.png`) and embed in the PR description as `<img src="data:image/png;base64,..." alt="Before/After" />`. Do not skip this step — PRs without visual verification will be rejected.
+9. **Visually verify UI changes**: If the ticket involves any visual/UI change (components, styles, text, dropdowns, layout, etc.), you MUST follow the "Verification" section in the persona prompt BEFORE opening a PR. Start the dev server, navigate to the affected page with chrome-devtools MCP, and take before/after screenshots. **Never commit screenshots to the repo.** Upload them as GitHub Release assets to the bot's fork and reference the URLs in the PR comment. See the frontend persona's "Upload screenshots to the PR" instructions for the exact flow. Do not skip this step — PRs without visual verification will be rejected.
 
 10. **Push and open PRs**: For each non-readonly repo where you made changes:
    ```

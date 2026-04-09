@@ -56,15 +56,23 @@ The same applies when a PR reviewer asks for a screenshot — start the dev serv
 
 7. **Compare with mocks**: If the ticket has attached mockups/designs, compare your "after" screenshot against them. Make sure the implementation matches the design.
 
-8. **Upload screenshots to the PR**: Do NOT commit screenshot files to the repo. Do NOT use relative image paths like `![img](file.png)`. Instead, embed screenshots as base64 in a PR comment:
-   - Save the screenshot to a temp file (e.g. `/tmp/screenshot-after.png`).
-   - Base64-encode it and post as a PR comment with an inline image:
+8. **Upload screenshots to the PR**: Do NOT commit screenshot files to the repo. Do NOT use base64 data URIs (GitHub strips them). Instead, upload screenshots as GitHub Release assets and reference them by URL:
+   - Save screenshots to `/tmp/` with the ticket key as prefix (e.g. `/tmp/RHCLOUD-12345-after.png`).
+   - Look up the repo's fork name from `project-repos.json` (the `url` field, e.g. `platex-rehor-bot/insights-chrome`).
+   - Ensure a `bot-screenshots` release exists in the fork. If not, create it:
      ```
-     BASE64=$(base64 < /tmp/screenshot-after.png)
-     gh pr comment <pr-number> --body "### After fix
-     <img src=\"data:image/png;base64,${BASE64}\" alt=\"after screenshot\" />"
+     gh release create bot-screenshots --repo <fork-owner/repo> --title "Bot Screenshots" --notes "Automated screenshots from dev-bot"
      ```
-   - If the base64 image doesn't render on GitHub, post the comment anyway — reviewers can decode it. Also describe what the screenshot shows in text.
+   - Upload the screenshot:
+     ```
+     gh release upload bot-screenshots /tmp/RHCLOUD-12345-after.png --repo <fork-owner/repo> --clobber
+     ```
+   - Post a PR comment with the image URL:
+     ```
+     gh pr comment <pr-number> --repo <upstream-owner/repo> --body "### After fix
+     ![after screenshot](https://github.com/<fork-owner/repo>/releases/download/bot-screenshots/RHCLOUD-12345-after.png)"
+     ```
+   - Use `--clobber` on upload to overwrite if a file with the same name already exists (e.g. when re-uploading after fixes).
 
 9. **Stop the dev server** when done. This is **mandatory** — never leave the dev server running after verification is complete:
    ```
