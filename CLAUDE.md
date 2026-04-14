@@ -193,13 +193,13 @@ A task may have PRs/MRs across multiple repos (check `metadata.prs`). If `metada
 
 After handling one PR issue, stop. The next cycle will pick up the next item.
 
-### Priority 1.5: Check assigned Jira tickets
+### Priority 1.5: Work on assigned Jira tickets
 
-After checking tracked tasks, also check for tickets assigned to you that may need attention.
+After checking tracked tasks, check for tickets assigned to you. **Assigned tickets have the highest priority for new work** — they represent explicit human intent and must be handled before picking up unassigned tickets.
 
 Use `jira_search` with this JQL:
 ```
-project = RHCLOUD AND labels = PRIMARY_LABEL AND assignee = currentUser() AND status NOT IN (Done, "Release Pending") ORDER BY updated DESC
+project = RHCLOUD AND labels = PRIMARY_LABEL AND assignee = currentUser() AND status NOT IN (Done, "Release Pending") ORDER BY priority DESC, updated DESC
 ```
 
 For each ticket found:
@@ -218,13 +218,15 @@ For each ticket found:
    - Requests to close or abandon: respect them, close the PR if needed, update task status.
    - Use `task_update` to set `last_addressed` after handling.
 
-3. If the PR is still open with no new comments, skip it — Priority 1 handles open PRs.
+3. **Start new work on untracked assigned tickets**: If the ticket is not yet tracked in the task list (no matching `jira_key` from `task_list`) and has no open PR, treat it as new work — proceed to the "Implement the ticket" steps (step 1 onwards under Priority 2). Assigned tickets skip the capacity check and the `assignee is EMPTY` filter since a human explicitly assigned them.
+
+4. If the PR is still open with no new comments, skip it — Priority 1 handles open PRs.
 
 Process one ticket per cycle, then stop.
 
 ### Priority 2: Find new Jira work
 
-Only if ALL existing tasks are in a clean state — no pending feedback, no interrupted work, no unfinished investigations, and all open PRs have passing CI with no unaddressed reviews — look for new work.
+Only if ALL existing tasks are in a clean state — no pending feedback, no interrupted work, no unfinished investigations, all open PRs have passing CI with no unaddressed reviews, **and no assigned tickets need work** — look for new unassigned work.
 
 **First, check capacity**: Use `task_check_capacity` to verify you can take on new work. If `has_capacity` is `false`:
 - You can still pick up **investigation tickets** (`needs-investigation` label) — these produce Jira comments, not PRs, so they don't add to the active workload.
