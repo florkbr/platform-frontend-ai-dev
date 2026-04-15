@@ -40,22 +40,49 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-secrets-read.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/scan-secrets.sh",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },
   "sandbox": {
     "enabled": false,
     "autoAllow": true,
-    "allowUnsandboxedCommands": false,
+    "allowUnsandboxedCommands": true,
     "failIfUnavailable": false,
     "filesystem": {
       "allowWrite": [
         "./repos",
-        "./data"
+        "./data",
+        "/tmp",
+        "~/.cache",
+        "~/.npm",
+        "~/.local"
       ],
       "denyRead": [
+        "~/.ssh",
+        "~/.gnupg",
+        "~/.config/gh",
         "~/.config/gcloud",
-        "~/.aws"
+        "~/.aws",
+        "~/sa-key.json"
       ],
       "denyWrite": [
         "/usr",
