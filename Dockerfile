@@ -8,6 +8,9 @@ RUN dnf install -y --nodocs --allowerasing \
     curl \
     jq \
     socat \
+    gcc \
+    make \
+    sqlite-devel \
     alsa-lib \
     atk \
     at-spi2-atk \
@@ -45,6 +48,29 @@ RUN npx playwright install chromium
 RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.12 /usr/bin/python
 
+# Go — multiple versions via GOVERSIONS build arg
+# Default Go is the first version listed. Bot switches with: eval "$(use-go 1.25.7)"
+ARG GOVERSIONS="1.24.2 1.25.7"
+RUN ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') \
+    && for v in $GOVERSIONS; do \
+         echo "Installing Go $v..." \
+         && curl -fsSL "https://go.dev/dl/go${v}.linux-${ARCH}.tar.gz" \
+            | tar -xz -C /usr/local \
+         && mv /usr/local/go /usr/local/go${v}; \
+       done \
+    && DEFAULT=$(echo $GOVERSIONS | awk '{print $1}') \
+    && ln -s /usr/local/go${DEFAULT} /usr/local/go
+ENV PATH="/usr/local/go/bin:$PATH"
+
+# use-go helper: eval "$(use-go 1.25.7)"
+RUN printf '#!/bin/bash\nV=${1:?Usage: use-go <version>}\nif [ ! -d "/usr/local/go${V}" ]; then echo "Go $V not installed. Available:" >&2; ls -d /usr/local/go[0-9]* | sed "s|/usr/local/go||" >&2; exit 1; fi\necho "export PATH=/usr/local/go${V}/bin:\${PATH#/usr/local/go*/bin:}"\n' > /usr/local/bin/use-go \
+    && chmod +x /usr/local/bin/use-go
+
+# golangci-lint
+RUN ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') \
+    && curl -fsSL "https://github.com/golangci/golangci-lint/releases/download/v2.1.6/golangci-lint-2.1.6-linux-${ARCH}.tar.gz" \
+    | tar -xz -C /usr/local/bin --strip-components=1 --wildcards '*/golangci-lint'
+
 # gh CLI
 RUN ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') \
     && curl -fsSL "https://github.com/cli/cli/releases/download/v2.67.0/gh_2.67.0_linux_${ARCH}.tar.gz" \
@@ -56,7 +82,7 @@ RUN ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') \
     | tar -xz -C /usr/local/bin --strip-components=2 bin/glab
 
 # bubblewrap (sandbox runtime for Claude Code)
-RUN dnf install -y --nodocs gcc libcap-devel \
+RUN dnf install -y --nodocs libcap-devel \
     && pip3.12 install meson ninja \
     && git clone --depth 1 --branch v0.11.1 https://github.com/containers/bubblewrap.git /tmp/bwrap \
     && cd /tmp/bwrap \
@@ -65,7 +91,6 @@ RUN dnf install -y --nodocs gcc libcap-devel \
     && meson install -C _builddir \
     && cd / && rm -rf /tmp/bwrap \
     && pip3.12 uninstall -y meson ninja \
-    && dnf remove -y gcc \
     && dnf clean all
 
 # grype (container image vulnerability scanner)
@@ -90,7 +115,8 @@ WORKDIR /home/botuser/app
 COPY pyproject.toml uv.lock* ./
 COPY bot/ bot/
 RUN uv sync --frozen --no-dev
-ENV PATH="/home/botuser/app/.venv/bin:$PATH"
+ENV PATH="/home/botuser/app/.venv/bin:/home/botuser/go/bin:$PATH"
+ENV GOPATH="/home/botuser/go"
 ENV CLAUDE_CODE_USE_VERTEX=1
 ENV VERTEX_LOCATION=global
 
