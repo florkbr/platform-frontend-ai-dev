@@ -173,7 +173,7 @@ Triage buckets (first match wins):
 2. **Interrupted work** — `in_progress` w/ `last_step` set, no PR yet. Reload persona → resume.
 3. **Investigations without report** — `in_progress` + `needs-investigation`, no analysis posted yet.
 4. **CVE investigations missing grype scan** — `last_step = "investigation_posted"`, no grype scan done. Build Dockerfile + scan per CVE persona.
-5. **Failed retryable tasks** — `last_step` = `clone_failed`/`push_failed`/`ci_failed`. Retry once. Same error → `paused_reason`, move on.
+5. **Failed retryable tasks** — `last_step` = `clone_failed`/`push_failed`/`ci_failed`. **Start fresh**: close existing PR (if any), delete remote branch, delete local branch, re-create from default branch. Same error twice → `paused_reason`, move on.
 
 None apply → Priority 1.
 
@@ -183,16 +183,30 @@ For each `pr_open`/`pr_changes` task (check `metadata.prs` for multi-repo, else 
 
 0. **Reload persona**: Read `personas/<name>/prompt.md` for repo tech stack (same logic as step 6). Has CI fix patterns + sequencing rules.
 1. `cd` repo dir. `git fetch origin`. Fork? Also `git fetch upstream`.
-2. Check `host` in `project-repos.json` → `gh` (GitHub) or `glab` (GitLab). Fork repos: `glab mr` needs `--repo <upstream-project-path>`.
+2. Check `host` in `project-repos.json` → `gh` (GitHub) or `glab` (GitLab). **ALL `glab` commands MUST include `--hostname gitlab.cee.redhat.com`** — without it, glab defaults to `gitlab.com` which is blocked. Fork repos: `glab mr` needs `--repo <upstream-project-path>`.
 3. PR status:
    - GH: `gh pr view <n> --json state,mergeable,statusCheckRollup,reviewDecision,reviews,url`
-   - GL: `glab mr view <n> --repo <upstream-project-path>`. For CI status: `glab api "projects/<url-encoded-project>/merge_requests/<n>/pipelines" --hostname gitlab.cee.redhat.com`.
+   - GL: Use the API for full status (glab mr view lacks structured data):
+     ```
+     glab api "projects/<url-encoded-path>/merge_requests/<n>" --hostname gitlab.cee.redhat.com
+     ```
+     URL-encode the project path: `service/app-interface` → `service%2Fapp-interface`.
+     Key fields in the response:
+     - `state`: "opened", "merged", "closed"
+     - `merge_status` / `detailed_merge_status`: "can_be_merged", "cannot_be_merged", "unchecked"
+     - `has_conflicts`: true/false — if true, needs rebase
+     - `head_pipeline.status`: "success", "failed", "running", "pending"
+     - `blocking_discussions_resolved`: false = unresolved threads block merge
+     - `draft`: true = WIP, not ready for merge
+     
+     For CI details: `glab api "projects/<path>/merge_requests/<n>/pipelines" --hostname gitlab.cee.redhat.com`
+     For approvals: `glab api "projects/<path>/merge_requests/<n>/approvals" --hostname gitlab.cee.redhat.com`
 
 4. **Review reminder**: If no Slack notification sent yet for this task → ALWAYS send `slack_notify` `review_reminder` (first notification, regardless of PR age). After first notification, cooldown handles repeat reminders automatically every 48h. **Bot reviews don't count** — only human reviews matter. PR with only bot reviews = still needs human review → send reminder.
 
 5. Handle in order:
 
-**Failing CI**: `gh pr checks <n>` / `glab ci view`. Checkout branch → fix → commit → push. Comment on Jira. `task_update` `last_addressed`.
+**Failing CI**: `gh pr checks <n>` / `glab api "projects/<path>/merge_requests/<n>/pipelines" --hostname gitlab.cee.redhat.com`. Checkout branch → fix → commit → push. Comment on Jira. `task_update` `last_addressed`.
 
 **Merge conflicts**: Rebase on default branch → resolve → force push. Jira comment. `task_update` `last_addressed`.
 
@@ -220,7 +234,7 @@ For each `pr_open`/`pr_changes` task (check `metadata.prs` for multi-repo, else 
 - `jira_transition_issue` → "Release Pending" (NOT "Done" — merge = stage only)
 - Jira comment noting merge + stage deploy
 - **Update linked issues**: duplicates → comment fix merged. Related → link PR. Blocked → blocker resolved.
-- **Delete bot branch**: GH: `gh api repos/{owner}/{repo}/git/refs/heads/bot/{KEY} -X DELETE`. GL: `glab api projects/:id/repository/branches/bot%2F{KEY} -X DELETE`. Local: `git branch -D bot/{KEY}`.
+- **Delete bot branch**: GH: `gh api repos/{owner}/{repo}/git/refs/heads/bot/{KEY} -X DELETE`. GL: `glab api projects/:id/repository/branches/bot%2F{KEY} -X DELETE --hostname gitlab.cee.redhat.com`. Local: `git branch -D bot/{KEY}`.
 - **Store learnings**: `memory_store` as `learning` + `codebase_pattern`. Set `repo` + `tags`.
 - `slack_notify` `release_pending`: "{KEY} merged → Release Pending. PR: {url}"
 
@@ -236,7 +250,7 @@ project = RHCLOUD AND labels = PRIMARY_LABEL AND assignee = currentUser() AND st
 ```
 
 For each:
-1. **Merged PRs?** `gh pr list --head bot/<KEY> --state merged` / `glab mr list --source-branch bot/<KEY> --merged`. If merged → transition "Release Pending", Jira comment, `task_update` archived, `memory_store`.
+1. **Merged PRs?** `gh pr list --head bot/<KEY> --state merged` / `glab mr list --source-branch bot/<KEY> --merged --hostname gitlab.cee.redhat.com`. If merged → transition "Release Pending", Jira comment, `task_update` archived, `memory_store`.
 2. **New Jira comments?** `jira_get_issue` → check for unaddressed comments since `last_addressed`. Handle: questions → reply, requirements → incorporate, close requests → respect.
 3. PR still open, no comments → skip (Priority 1 handles).
 
@@ -315,7 +329,7 @@ Before starting work, `jira_get_issue` → check issue links:
 
    Dir = `./repos/<repo-name>/` (from upstream URL basename, no `.git`).
 
-   **Clone on demand**: Not exists → `git clone --depth 1 <url> ./repos/<name>/`. Has upstream → `git remote add upstream <upstream-url>`. Clone fails → Jira comment, stop. Start shallow (`--depth 1`), deepen incrementally if needed (`git fetch --deepen=50`). Never clone full history upfront.
+   **Clone on demand**: Not exists → `git clone --depth 1 --single-branch <url> ./repos/<name>/`. Has upstream → `git remote add upstream <upstream-url>`. If more history needed → `git fetch --deepen=50` or `git fetch --unshallow`. Clone fails → Jira comment, stop.
 
    **Verify remotes**: Exists → `git remote -v`. Origin must match `url`. Upstream remote must match `upstream` field. Fix w/ `set-url`/`add` as needed.
 
@@ -323,6 +337,12 @@ Before starting work, `jira_get_issue` → check issue links:
    - Fork: `git fetch upstream` → `git checkout master && git reset --hard upstream/master`. If push fails, sync fork first: `gh repo sync <fork> --source <upstream> --force`
    - Direct: `git fetch origin` → checkout default branch → pull
    - Branch: `bot/<TICKET-KEY>`
+
+   **Fresh start (retry/redo)**: When retrying failed work, always start clean:
+   1. Close existing PR if open: GH `gh pr close <n> --repo <upstream>` / GL `glab mr close <n> --hostname gitlab.cee.redhat.com`
+   2. Delete remote branch: GH `gh api repos/{owner}/{repo}/git/refs/heads/bot/{KEY} -X DELETE` / GL `glab api projects/:id/repository/branches/bot%2F{KEY} -X DELETE --hostname gitlab.cee.redhat.com`
+   3. Delete local branch: `git branch -D bot/<KEY>`
+   4. Re-create branch from updated default branch and re-implement
 
    **Git identity**: Global config is set by `run.py` at startup (name, email, GPG signing). Do NOT run `git config --local` for identity/signing — it's already handled globally. Do NOT check `GPG_SIGNING_KEY` env var (it's sanitized at startup).
 
@@ -366,8 +386,8 @@ Before starting work, `jira_get_issue` → check issue links:
     GH direct: `gh pr create --title "..." --body "..."`
     Push fails → `last_step = "push_failed"`, Jira comment, keep `in_progress` for retry.
 
-    GL fork: `glab mr create --repo <upstream-path> --title "..." --description "..."`
-    GL direct: `glab mr create --title "..." --description "..."`
+    GL fork: `glab mr create --repo <upstream-path> --hostname gitlab.cee.redhat.com --title "..." --description "..."`
+    GL direct: `glab mr create --hostname gitlab.cee.redhat.com --title "..." --description "..."`
 
     Title ≤50 chars. Body = ticket key + changes summary.
     Readonly repos: include config changes in Jira comment.
