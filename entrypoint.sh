@@ -2,6 +2,19 @@
 # Bot container entrypoint — decode secrets, start Chromium, launch bot.
 set -e
 
+# --- Verify required CLI tools ---
+MISSING=""
+for tool in gh glab git gpg; do
+    if ! command -v "$tool" &>/dev/null; then
+        MISSING="$MISSING $tool"
+    fi
+done
+if [ -n "$MISSING" ]; then
+    echo "FATAL: Missing required tools:$MISSING" >&2
+    echo "Rebuild with: docker compose build --no-cache bot" >&2
+    exit 1
+fi
+
 # Kubernetes secretKeyRef auto-decodes base64, so secrets arrive as raw values
 # in OpenShift. Local docker-compose still passes them base64-encoded via .env.
 # This helper handles both: values starting with "-----" or "{" are not valid
@@ -87,14 +100,26 @@ if [ -n "${GITLAB_TOKEN:-}" ]; then
     mkdir -p ~/.config/glab-cli
     cat > ~/.config/glab-cli/config.yml <<EOF
 git_protocol: ssh
+check_update: false
+no_prompt: true
+host: gitlab.cee.redhat.com
 hosts:
     gitlab.cee.redhat.com:
         token: ${GITLAB_TOKEN}
+        api_protocol: https
         api_host: gitlab.cee.redhat.com
         git_protocol: ssh
+        skip_tls_verify: true
 EOF
+    chmod 600 ~/.config/glab-cli/config.yml
     unset GITLAB_TOKEN
 fi
+
+# --- Verify auth ---
+echo "Verifying GitHub auth..."
+gh auth status 2>&1 | head -3 || { echo "WARNING: gh auth failed"; }
+echo "Verifying GitLab auth..."
+glab auth status --hostname gitlab.cee.redhat.com 2>&1 | head -3 || { echo "WARNING: glab auth failed"; }
 
 # Start headless Chromium in background (Playwright-installed binary)
 CHROME_BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -name chrome -type f | head -1)
