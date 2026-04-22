@@ -13,8 +13,6 @@ USER 0
 
 RUN pip3 install uv
 
-ENV UV_CACHE_DIR=/tmp/uv-cache
-
 WORKDIR /app
 
 COPY memory-server/pyproject.toml memory-server/uv.lock* ./
@@ -29,8 +27,12 @@ COPY --from=dashboard /app/memory-server/src/static/assets/ src/static/assets/
 RUN uv sync --frozen --no-dev
 
 # Pre-download the embedding model so startup doesn't need HuggingFace
-RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" \
+    && rm -rf /opt/app-root/src/.cache/uv
 
 EXPOSE 8080
 
-CMD ["uv", "run", "--no-sync", "python", "-m", "src.server"]
+# Run python directly from the pre-built venv — avoids uv cache init permission
+# issues with OpenShift arbitrary UIDs (astral-sh/uv#10023)
+ENV PATH="/app/.venv/bin:$PATH"
+CMD ["python", "-m", "src.server"]
