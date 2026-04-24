@@ -110,9 +110,15 @@ if __name__ == "__main__":
     # Build the MCP app (handles /mcp endpoint + custom routes)
     mcp_app = mcp.http_app(transport="streamable-http")
 
+    @asynccontextmanager
+    async def combined_lifespan(app):
+        async with lifespan(app):
+            async with mcp_app.lifespan(app):
+                yield
+
     # Wrap in an outer Starlette app so we can add WebSocket + lifespan
     app = Starlette(
-        lifespan=lifespan,
+        lifespan=combined_lifespan,
         routes=[
             WebSocketRoute("/ws", ws_events),
             Mount("/", app=mcp_app),
