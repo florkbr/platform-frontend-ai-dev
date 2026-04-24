@@ -241,14 +241,9 @@ Only if ALL tasks clean — no pending feedback, no interrupted work, no unfinis
 
 **Check capacity**: `task_check_capacity`. No capacity → only investigation tickets (`needs-investigation`). At limit for impl tickets.
 
-**Discover statuses first**: On first cycle (or periodically), `jira_get_transitions` on any RHCLOUD ticket → learn available statuses. Pick only "not started" statuses (e.g. New, Backlog, Refinement — NOT In Progress, Code Review, Done, etc.). Cache via `memory_store` tag `jira-statuses`. Refresh weekly.
+Invoke `/new-work` skill. It pre-fetches unassigned candidates from current sprint (+ backlog if `BOT_INCLUDE_BACKLOG=true`), ordered by priority, with full context (description, comments, links) and `repo:` label matching against `project-repos.json`.
 
-JQL (`limit=10`, paginate w/ `page_token`):
-```
-project = RHCLOUD AND labels = PRIMARY_LABEL AND assignee is EMPTY AND status IN (<not-started-statuses>) ORDER BY priority DESC, created ASC
-```
-
-Scan page for ticket w/ `repo:` label matching `project-repos.json`. Multiple `repo:` labels OK if all match. At capacity → only `needs-investigation`. No match → next page (`page_token`, NOT `start_at`). All pages exhausted → memory housekeeping → "NO_WORK_FOUND" → stop.
+Pick the first candidate with matching `repos:` field. At capacity → only `needs-investigation`. No match in output → memory housekeeping → "NO_WORK_FOUND" → stop.
 
 **`[FIRING]` / ALERT tickets ARE real work.** `ALERT{hash}` labels + `[FIRING]` prefixes = automated alerts for issues that need fixing (e.g. RDSEOL = RDS end-of-life upgrades). These are NOT monitoring noise to skip. Treat like any other ticket — check `repo:` label, match persona, implement. Priority often higher than regular tickets because they signal something broken or expiring.
 
