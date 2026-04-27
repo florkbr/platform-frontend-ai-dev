@@ -169,7 +169,7 @@ wait_for() {
     local name="$1" url="$2" timeout="${3:-120}"
     echo "Waiting for ${name} at ${url} (timeout=${timeout}s)..."
     local elapsed=0
-    until curl -sf "$url" > /dev/null 2>&1; do
+    until curl -sf --noproxy '*' "$url" > /dev/null 2>&1; do
         elapsed=$((elapsed + 2))
         if [ "$elapsed" -ge "$timeout" ]; then
             echo "FATAL: ${name} not ready after ${timeout}s" >&2
