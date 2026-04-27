@@ -355,8 +355,10 @@ Before starting work, `jira_get_issue` → check issue links:
     GH direct: `gh pr create --title "..." --body "..."`
     Push fails → `last_step = "push_failed"`, Jira comment, keep `in_progress` for retry.
 
-    GL fork: `glab mr create --repo <upstream-path> --hostname gitlab.cee.redhat.com --title "..." --description "..."`
-    GL direct: `glab mr create --hostname gitlab.cee.redhat.com --title "..." --description "..."`
+    GL fork: `glab mr create --repo <upstream-path> --hostname gitlab.cee.redhat.com --title "..." --description "$(cat <<'EOF' ... EOF)"`
+    GL direct: `glab mr create --hostname gitlab.cee.redhat.com --title "..." --description "$(cat <<'EOF' ... EOF)"`
+
+    **CRITICAL**: glab URL-encodes newlines if description is passed inline. ALWAYS use heredoc `$(cat <<'EOF' ... EOF)` for multiline descriptions. Same pattern as `gh pr create --body`.
 
     Title ≤50 chars. Body = ticket key + changes summary.
     Readonly repos: include config changes in Jira comment.
