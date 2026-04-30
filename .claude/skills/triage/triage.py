@@ -177,8 +177,12 @@ def classify_gh(pr):
     if pr.get("reviewDecision") == "CHANGES_REQUESTED":
         issues.append("changes_requested")
     for r in (pr.get("reviews") or []):
-        if r.get("state") == "CHANGES_REQUESTED":
-            issues.append(f"review:{r.get('author', {}).get('login', '?')}")
+        rstate = r.get("state", "")
+        author = r.get("author", {}).get("login", "?")
+        if rstate == "CHANGES_REQUESTED":
+            issues.append(f"review:{author}")
+        elif rstate == "COMMENTED" and len((r.get("body") or "").strip()) > 20:
+            issues.append(f"review_comment:{author}")
     return state, issues
 
 
@@ -225,6 +229,14 @@ def enrich(task):
                 pr_results.append({"repo": pr_repo, "num": pr_num, "host": host, "state": state, "issues": issues, "data": data})
                 all_issues.extend(issues)
                 pr_comments.extend(gh_pr_comments(up, pr_num))
+                for rv in (data.get("reviews") or []):
+                    body = (rv.get("body") or "").strip()
+                    if body:
+                        pr_comments.append({
+                            "a": rv.get("author", {}).get("login", "?"),
+                            "t": rv.get("submittedAt", "")[:16],
+                            "b": f"[REVIEW {rv.get('state', '?')}] {body}",
+                        })
         elif host == "gitlab" and up:
             data = gl_mr(up, pr_num)
             if data:
@@ -285,6 +297,27 @@ def fmt_task(e):
     return "\n".join(lines)
 
 
+def _is_bot_author(author):
+    if not author or author == "?":
+        return False
+    a = author.lower()
+    return "[bot]" in a or a.endswith("-bot") or a in (
+        "github-actions", "dependabot", "renovate",
+    )
+
+
+def has_new_pr_feedback(e):
+    last_addr = e["task"].get("last_addressed", "")
+    for c in e["pr_comments"]:
+        author = c.get("a", "?")
+        if _is_bot_author(author):
+            continue
+        ct = c.get("t", "")[:16]
+        if not last_addr or ct > last_addr[:16]:
+            return True
+    return False
+
+
 def has_new_jira_feedback(e):
     last_addr = e["task"].get("last_addressed", "")
     for c in e["jira_comments"]:
@@ -330,10 +363,12 @@ def main():
             ci_fail.append(e)
         elif "conflict" in issues:
             conflict.append(e)
-        elif any(i in ("changes_requested", "unresolved_threads") or i.startswith("review:") for i in issues):
+        elif any(i in ("changes_requested", "unresolved_threads") or i.startswith("review:") or i.startswith("review_comment:") for i in issues):
             feedback.append(e)
         elif t.get("status") == "in_progress" and not t.get("pr_number") and not meta.get("prs"):
             interrupted.append(e)
+        elif has_new_pr_feedback(e):
+            feedback.append(e)
         elif has_new_jira_feedback(e):
             feedback.append(e)
         else:

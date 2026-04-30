@@ -186,7 +186,7 @@ PR statuses are in the triage output. For each `pr_open`/`pr_changes` task:
 0. **Reload persona**: Read `personas/<name>/prompt.md` for repo tech stack (same logic as step 6). Has CI fix patterns + sequencing rules.
 1. `cd` repo dir. `git fetch origin`. Fork? Also `git fetch upstream`.
 2. Check `host` in `project-repos.json` → `gh` (GitHub) or `glab` (GitLab). **ALL `glab` commands MUST include `--hostname gitlab.cee.redhat.com`** — without it, glab defaults to `gitlab.com` which is blocked. Fork repos: `glab mr` needs `--repo <upstream-project-path>`.
-3. **Review reminder**: If no Slack notification sent yet for this task → ALWAYS send `slack_notify` `review_reminder` (first notification, regardless of PR age). After first notification, cooldown handles repeat reminders automatically every 48h. **Bot reviews don't count** — only human reviews matter. PR with only bot reviews = still needs human review → send reminder.
+3. **Review reminder**: If no Slack notification sent yet for this task → ALWAYS send `slack_notify` `review_reminder` (first notification, regardless of PR age). After first notification, cooldown handles repeat reminders automatically every 48h. **Bot reviews don't count for reminders** — only human reviews satisfy the "reviewed" condition. PR with only bot reviews = still needs human review → send reminder. **However, bot review feedback IS actionable** — address suggestions from coderabbitai, sourcery-ai, etc. as real code review feedback. Fix valid issues, dismiss false positives with a reply.
 
 4. Handle in order:
 
