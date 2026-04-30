@@ -297,6 +297,27 @@ def fmt_task(e):
     return "\n".join(lines)
 
 
+def _is_bot_author(author):
+    if not author or author == "?":
+        return False
+    a = author.lower()
+    return "[bot]" in a or a.endswith("-bot") or a in (
+        "github-actions", "dependabot", "renovate",
+    )
+
+
+def has_new_pr_feedback(e):
+    last_addr = e["task"].get("last_addressed", "")
+    for c in e["pr_comments"]:
+        author = c.get("a", "?")
+        if _is_bot_author(author):
+            continue
+        ct = c.get("t", "")[:16]
+        if not last_addr or ct > last_addr[:16]:
+            return True
+    return False
+
+
 def has_new_jira_feedback(e):
     last_addr = e["task"].get("last_addressed", "")
     for c in e["jira_comments"]:
@@ -346,6 +367,8 @@ def main():
             feedback.append(e)
         elif t.get("status") == "in_progress" and not t.get("pr_number") and not meta.get("prs"):
             interrupted.append(e)
+        elif has_new_pr_feedback(e):
+            feedback.append(e)
         elif has_new_jira_feedback(e):
             feedback.append(e)
         else:
