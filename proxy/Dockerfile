@@ -40,6 +40,7 @@ RUN mkdir -p /var/log/squid /var/spool/squid /var/run/squid /var/run/devbot \
     && chmod -R g+rwX /var/log/squid /var/spool/squid /var/run/squid /var/run/devbot
 
 EXPOSE 3128
+EXPOSE 8443
 USER squid
 
 CMD ["/usr/local/bin/start.sh"]

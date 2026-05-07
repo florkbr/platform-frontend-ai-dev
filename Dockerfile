@@ -141,7 +141,7 @@ RUN uv sync --frozen --no-dev
 ENV PATH="/home/botuser/app/.venv/bin:/home/botuser/go/bin:$PATH"
 ENV GOPATH="/home/botuser/go"
 ENV CLAUDE_CODE_USE_VERTEX=1
-ENV VERTEX_LOCATION=global
+ENV CLOUD_ML_REGION=global
 ENV BUILDAH_ISOLATION=chroot
 
 # Copy bot config files

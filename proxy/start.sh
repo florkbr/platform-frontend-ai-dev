@@ -39,6 +39,18 @@ if [ -n "${GPG_PRIVATE_KEY_B64:-}" ]; then
     echo "GPG keys imported in proxy container"
 fi
 
+# Decode GCP service account key for Vertex AI auth proxy
+if [ -n "${GOOGLE_SA_KEY_B64:-}" ]; then
+    SA_KEY_PATH="/var/run/devbot/vertex-sa.json"
+    case "$GOOGLE_SA_KEY_B64" in
+        -----*|"{"*) printf '%s' "$GOOGLE_SA_KEY_B64" > "$SA_KEY_PATH" ;;
+        *) printf '%s' "$GOOGLE_SA_KEY_B64" | tr -d '[:space:]' | base64 -d > "$SA_KEY_PATH" ;;
+    esac
+    chmod 600 "$SA_KEY_PATH"
+    export GOOGLE_APPLICATION_CREDENTIALS="$SA_KEY_PATH"
+    echo "GCP SA key decoded for vertex-auth-proxy"
+fi
+
 # Start Squid in background
 squid -N -f /etc/squid/squid.conf &
 SQUID_PID=$!
