@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -25,6 +26,10 @@ var (
 	glabPath = flag.String("glab-path", "/usr/local/bin/glab-real", "path to real glab binary")
 	gpgPath  = flag.String("gpg-path", "/usr/bin/gpg", "path to real gpg binary")
 	timeout  = flag.Duration("timeout", 60*time.Second, "per-command timeout")
+
+	vertexListen  = flag.String("vertex-listen", ":8443", "vertex auth proxy listen address")
+	vertexProject = flag.String("vertex-project", "", "real GCP project ID")
+	vertexRegion  = flag.String("vertex-region", "", "real GCP region")
 )
 
 type server struct {
@@ -184,6 +189,15 @@ func main() {
 			*timeout = d
 		}
 	}
+	if v := os.Getenv("VERTEX_AUTH_LISTEN"); v != "" {
+		*vertexListen = v
+	}
+	if v := os.Getenv("GCP_PROJECT_ID"); v != "" {
+		*vertexProject = v
+	}
+	if v := os.Getenv("GCP_REGION"); v != "" {
+		*vertexRegion = v
+	}
 
 	lis, err := openListener(*listen)
 	if err != nil {
@@ -192,8 +206,8 @@ func main() {
 
 	policy := executor.DefaultPolicy()
 
-	srv := grpc.NewServer()
-	pb.RegisterExecutorServer(srv, &server{
+	grpcSrv := grpc.NewServer()
+	pb.RegisterExecutorServer(grpcSrv, &server{
 		policy:   policy,
 		ghPath:   *ghPath,
 		glabPath: *glabPath,
@@ -201,16 +215,41 @@ func main() {
 		timeout:  *timeout,
 	})
 
+	var httpSrv *http.Server
+	if *vertexProject != "" {
+		ts, err := executor.NewTokenSource(context.Background())
+		if err != nil {
+			log.Fatalf("vertex token source: %v", err)
+		}
+		vp := executor.VertexPolicyFromEnv()
+		if vp == nil {
+			log.Fatal("vertex: VERTEX_ALLOWED_MODELS must be set when vertex-project is configured")
+		}
+		handler := executor.NewVertexProxy(*vertexProject, *vertexRegion, ts, vp)
+		httpSrv = &http.Server{Addr: *vertexListen, Handler: handler}
+		go func() {
+			log.Printf("vertex-auth-proxy listening on %s (project=%s region=%s)", *vertexListen, *vertexProject, *vertexRegion)
+			if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("vertex proxy: %v", err)
+			}
+		}()
+	}
+
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		log.Println("shutting down...")
-		srv.GracefulStop()
+		grpcSrv.GracefulStop()
+		if httpSrv != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			httpSrv.Shutdown(ctx)
+		}
 	}()
 
 	log.Printf("executor-server listening on %s", *listen)
-	if err := srv.Serve(lis); err != nil {
+	if err := grpcSrv.Serve(lis); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
 }

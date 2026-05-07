@@ -27,6 +27,12 @@ parameters:
   value: "false"
 - name: BOT_INSTANCE_ID
   value: ""
+- name: GCP_PROJECT_ID
+  required: true
+- name: GCP_REGION
+  required: true
+- name: VERTEX_ALLOWED_MODELS
+  required: true
 objects:
 
 # ============================================================================
@@ -190,6 +196,9 @@ objects:
           - containerPort: 9090
             name: executor
             protocol: TCP
+          - containerPort: 8443
+            name: vertex-auth
+            protocol: TCP
           env:
           - name: EXECUTOR_LISTEN
             value: ":9090"
@@ -218,6 +227,17 @@ objects:
               secretKeyRef:
                 name: devbot-secrets
                 key: gh-bot-gpg-private
+          - name: GOOGLE_SA_KEY_B64
+            valueFrom:
+              secretKeyRef:
+                name: devbot-secrets
+                key: gcp-vertex-claude-sa
+          - name: GCP_PROJECT_ID
+            value: ${GCP_PROJECT_ID}
+          - name: GCP_REGION
+            value: ${GCP_REGION}
+          - name: VERTEX_ALLOWED_MODELS
+            value: ${VERTEX_ALLOWED_MODELS}
           livenessProbe:
             tcpSocket:
               port: 3128
@@ -257,6 +277,10 @@ objects:
       targetPort: executor
       protocol: TCP
       name: executor
+    - port: 8443
+      targetPort: vertex-auth
+      protocol: TCP
+      name: vertex-auth
 
 # --- Bot Deployment ---
 - apiVersion: apps/v1
@@ -296,8 +320,15 @@ objects:
             value: http://devbot-memory-server:8080/health
           - name: BOT_MEMORY_HEALTH_TIMEOUT
             value: "120"
-          - name: GOOGLE_APPLICATION_CREDENTIALS
-            value: /home/botuser/sa-key.json
+          # Vertex AI — auth proxied through proxy container
+          - name: CLAUDE_CODE_SKIP_VERTEX_AUTH
+            value: "true"
+          - name: ANTHROPIC_VERTEX_BASE_URL
+            value: http://devbot-proxy:8443
+          - name: ANTHROPIC_VERTEX_PROJECT_ID
+            value: dummy-project
+          - name: CLOUD_ML_REGION
+            value: global
           # Executor — thin client connects to proxy over TCP
           - name: EXECUTOR_ADDR
             value: devbot-proxy:9090
@@ -348,12 +379,7 @@ objects:
             value: devbot-memory-server,devbot-proxy,localhost,127.0.0.1
           - name: no_proxy
             value: devbot-memory-server,devbot-proxy,localhost,127.0.0.1
-          # Secrets that stay in bot container (GCP for Vertex AI, Jira for MCP, SSO for E2E)
-          - name: GOOGLE_SA_KEY_B64
-            valueFrom:
-              secretKeyRef:
-                name: devbot-secrets
-                key: gcp-vertex-claude-sa
+          # Secrets that stay in bot container (Jira for MCP, SSO for E2E)
           - name: JIRA_URL
             value: https://redhat.atlassian.net
           - name: JIRA_USERNAME
@@ -408,6 +434,8 @@ objects:
       - port: 3128
         protocol: TCP
       - port: 9090
+        protocol: TCP
+      - port: 8443
         protocol: TCP
     - to:
       - podSelector:

@@ -122,11 +122,6 @@ verify_platform_signing() {
 verify_platform_signing "GitHub" "https://github.com/test/repo.git" "${GH_USER_EMAIL}"
 verify_platform_signing "GitLab" "https://gitlab.cee.redhat.com/test/repo.git" "${GL_USER_EMAIL}"
 
-# Decode GCP service account key
-if [ -n "${GOOGLE_SA_KEY_B64:-}" ]; then
-    decode_or_raw "$GOOGLE_SA_KEY_B64" > /home/botuser/sa-key.json
-fi
-
 # Write Jira credentials file for triage skill (same pattern as gh/glab config files)
 if [ -n "${JIRA_URL:-}" ] && [ -n "${JIRA_USERNAME:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ]; then
     cat > ~/.jira-credentials <<EOF

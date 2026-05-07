@@ -158,12 +158,6 @@ def main() -> None:
     # Load .env before anything else so MCP servers get the credentials
     load_dotenv(SCRIPT_DIR / ".env")
 
-    # Resolve GOOGLE_APPLICATION_CREDENTIALS to absolute path so the SDK
-    # finds the service account key regardless of working directory
-    gac = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if gac and not os.path.isabs(gac):
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(SCRIPT_DIR / gac)
-
     # Set up git identity from env vars (no-op if not configured)
     setup_git(SCRIPT_DIR)
 
