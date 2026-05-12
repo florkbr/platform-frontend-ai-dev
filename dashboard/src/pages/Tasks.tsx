@@ -17,7 +17,7 @@ const STATUS_OPTIONS = [
 
 const LIMIT = 20;
 
-export default function Tasks() {
+export default function Tasks({ instanceId }: { instanceId?: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState('');
@@ -27,10 +27,16 @@ export default function Tasks() {
   const { onEvent } = useWS();
 
   const load = useCallback(async () => {
-    const res = await fetchTasks({ status: status || undefined, exclude_status: status ? undefined : 'archived', limit: LIMIT, offset });
+    const res = await fetchTasks({
+      status: status || undefined,
+      exclude_status: status ? undefined : 'archived',
+      limit: LIMIT,
+      offset,
+      instance_id: instanceId,
+    });
     setTasks(res.items || []);
     setTotal(res.total || 0);
-  }, [status, offset]);
+  }, [status, offset, instanceId]);
 
   useEffect(() => {
     load();

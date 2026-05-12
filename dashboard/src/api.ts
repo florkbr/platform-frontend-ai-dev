@@ -1,3 +1,5 @@
+import type { BotInstance } from './types';
+
 export async function fetchStats() {
   return (await fetch('/api/stats')).json();
 }
@@ -6,10 +8,15 @@ export async function fetchBotStatus() {
   return (await fetch('/api/bot-status')).json();
 }
 
-export async function fetchTasks(params: { status?: string; exclude_status?: string; limit?: number; offset?: number }) {
+export async function fetchInstances(): Promise<BotInstance[]> {
+  return (await fetch('/api/instances')).json();
+}
+
+export async function fetchTasks(params: { status?: string; exclude_status?: string; limit?: number; offset?: number; instance_id?: string }) {
   const qs = new URLSearchParams();
   if (params.status) qs.set('status', params.status);
   if (params.exclude_status) qs.set('exclude_status', params.exclude_status);
+  if (params.instance_id) qs.set('instance_id', params.instance_id);
   qs.set('limit', String(params.limit ?? 20));
   qs.set('offset', String(params.offset ?? 0));
   return (await fetch('/api/tasks?' + qs)).json();

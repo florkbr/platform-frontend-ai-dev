@@ -35,6 +35,18 @@ export interface Memory {
   similarity?: number;
 }
 
+export interface BotInstance {
+  instance_id: string;
+  state: 'working' | 'idle' | 'error' | 'unknown';
+  message: string;
+  jira_key: string | null;
+  repo: string | null;
+  cycle_start: string | null;
+  updated_at: string;
+  active_tasks: number;
+  max_tasks: number;
+}
+
 export interface BotStatus {
   state: 'working' | 'idle' | 'error' | 'unknown';
   message: string;

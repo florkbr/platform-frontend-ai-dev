@@ -59,6 +59,18 @@ header {
   object-fit: cover;
 }
 
+.header-home {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.header-home:hover {
+  text-decoration: none;
+  opacity: 0.85;
+}
+
 .header-title {
   font-size: 24px;
   font-weight: 700;
@@ -66,6 +78,20 @@ header {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.instance-selector {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+.instance-selector:focus {
+  border-color: var(--accent);
 }
 
 .header-right {
@@ -272,6 +298,112 @@ header {
 }
 .banner-toggle:hover {
   color: var(--text);
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: var(--text-dim);
+}
+.breadcrumb a {
+  color: var(--accent);
+  font-weight: 500;
+}
+.breadcrumb-sep {
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+.breadcrumb-current {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Instance grid */
+.instance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.instance-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  border-left: 3px solid var(--border);
+}
+.instance-card:hover {
+  border-color: var(--text-dim);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.instance-card.state-working {
+  border-left-color: var(--yellow);
+}
+.instance-card.state-idle {
+  border-left-color: var(--green);
+}
+.instance-card.state-error {
+  border-left-color: var(--red);
+}
+
+.instance-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.instance-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.instance-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.instance-message {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.instance-card-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.instance-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.instance-tasks {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.instance-updated {
+  color: var(--text-dim);
 }
 
 /* Tab nav */

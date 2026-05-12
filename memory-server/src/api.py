@@ -15,33 +15,64 @@ async def api_tasks(request: Request) -> JSONResponse:
     status = request.query_params.get("status")
     limit = int(request.query_params.get("limit", "20"))
     offset = int(request.query_params.get("offset", "0"))
+    instance_id = request.query_params.get("instance_id")
 
     exclude = request.query_params.get("exclude_status")
 
+    instance_clause = ""
+    instance_params: list = []
+    if instance_id:
+        instance_clause = " AND instance_id = $__idx__"
+        instance_params = [instance_id]
+
     if status:
+        base_params = [status]
+        where = "WHERE status = $1::task_status"
+        if instance_id:
+            idx = len(base_params) + 1
+            where += f" AND instance_id = ${idx}"
+            base_params.append(instance_id)
+
         total = await pool.fetchval(
-            "SELECT COUNT(*) FROM tasks WHERE status = $1::task_status", status
+            f"SELECT COUNT(*) FROM tasks {where}", *base_params
         )
-        # Archived tasks sort by last_addressed (≈ archive time); others by created_at
         order_col = "last_addressed" if status == "archived" else "created_at"
+        base_params.extend([limit, offset])
         rows = await pool.fetch(
-            f"SELECT * FROM tasks WHERE status = $1::task_status ORDER BY {order_col} DESC LIMIT $2 OFFSET $3",
-            status, limit, offset,
+            f"SELECT * FROM tasks {where} ORDER BY {order_col} DESC LIMIT ${len(base_params) - 1} OFFSET ${len(base_params)}",
+            *base_params,
         )
     elif exclude:
+        base_params = [exclude]
+        where = "WHERE status != $1::task_status"
+        if instance_id:
+            idx = len(base_params) + 1
+            where += f" AND instance_id = ${idx}"
+            base_params.append(instance_id)
+
         total = await pool.fetchval(
-            "SELECT COUNT(*) FROM tasks WHERE status != $1::task_status", exclude
+            f"SELECT COUNT(*) FROM tasks {where}", *base_params
         )
+        base_params.extend([limit, offset])
         rows = await pool.fetch(
-            "SELECT * FROM tasks WHERE status != $1::task_status ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-            exclude, limit, offset,
+            f"SELECT * FROM tasks {where} ORDER BY created_at DESC LIMIT ${len(base_params) - 1} OFFSET ${len(base_params)}",
+            *base_params,
         )
     else:
-        total = await pool.fetchval("SELECT COUNT(*) FROM tasks")
-        rows = await pool.fetch(
-            "SELECT * FROM tasks ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-            limit, offset,
-        )
+        if instance_id:
+            total = await pool.fetchval(
+                "SELECT COUNT(*) FROM tasks WHERE instance_id = $1", instance_id
+            )
+            rows = await pool.fetch(
+                "SELECT * FROM tasks WHERE instance_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+                instance_id, limit, offset,
+            )
+        else:
+            total = await pool.fetchval("SELECT COUNT(*) FROM tasks")
+            rows = await pool.fetch(
+                "SELECT * FROM tasks ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+                limit, offset,
+            )
 
     # Fetch latest Slack notification per task
     jira_keys = [r["jira_key"] for r in rows]
@@ -298,6 +329,40 @@ async def api_bot_status_update(request: Request) -> JSONResponse:
         "updated_at": row["updated_at"].isoformat(),
     }
     await bus.publish(Event("bot_status", result))
+    return JSONResponse(result)
+
+
+async def api_instances(request: Request) -> JSONResponse:
+    """GET /api/instances — list all bot instances with aggregated task counts."""
+    pool = get_pool()
+    instance_rows = await pool.fetch(
+        "SELECT * FROM bot_instances ORDER BY updated_at DESC"
+    )
+    # Count active tasks per instance
+    task_counts = await pool.fetch(
+        """
+        SELECT instance_id, COUNT(*) AS active
+        FROM tasks
+        WHERE status IN ('in_progress', 'pr_open', 'pr_changes')
+        AND instance_id IS NOT NULL
+        GROUP BY instance_id
+        """
+    )
+    counts_map = {r["instance_id"]: r["active"] for r in task_counts}
+
+    result = []
+    for r in instance_rows:
+        result.append({
+            "instance_id": r["instance_id"],
+            "state": r["state"],
+            "message": r["message"],
+            "jira_key": r["jira_key"],
+            "repo": r["repo"],
+            "cycle_start": r["cycle_start"].isoformat() if r["cycle_start"] else None,
+            "updated_at": r["updated_at"].isoformat(),
+            "active_tasks": counts_map.get(r["instance_id"], 0),
+            "max_tasks": 10,
+        })
     return JSONResponse(result)
 
 
