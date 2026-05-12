@@ -250,6 +250,7 @@ def register_task_tools(mcp: FastMCP):
         repo: The repo being worked in (if any).
         instance_id: Bot instance name for multi-instance setups."""
         pool = get_pool()
+        # Legacy singleton update (backward compat)
         row = await pool.fetchrow(
             """
             UPDATE bot_status SET state = $1, message = $2, jira_key = $3, repo = $4,
@@ -260,12 +261,30 @@ def register_task_tools(mcp: FastMCP):
             """,
             state, message, jira_key, repo, instance_id,
         )
+        # Multi-instance upsert
+        if instance_id:
+            await pool.execute(
+                """
+                INSERT INTO bot_instances (instance_id, state, message, jira_key, repo, cycle_start, updated_at)
+                VALUES ($1, $2, $3, $4, $5,
+                    CASE WHEN $2 = 'working' THEN NOW() ELSE NULL END,
+                    NOW())
+                ON CONFLICT (instance_id) DO UPDATE SET
+                    state = $2, message = $3, jira_key = $4, repo = $5,
+                    cycle_start = CASE
+                        WHEN bot_instances.state = 'idle' AND $2 = 'working' THEN NOW()
+                        ELSE bot_instances.cycle_start
+                    END,
+                    updated_at = NOW()
+                """,
+                instance_id, state, message, jira_key, repo,
+            )
         result = {
             "state": row["state"],
             "message": row["message"],
             "jira_key": row["jira_key"],
             "repo": row["repo"],
-            "instance_id": row.get("instance_id"),
+            "instance_id": row.get("instance_id") or instance_id,
             "cycle_start": row["cycle_start"].isoformat() if row["cycle_start"] else None,
             "updated_at": row["updated_at"].isoformat(),
         }

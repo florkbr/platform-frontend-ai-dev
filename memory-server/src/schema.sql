@@ -129,6 +129,28 @@ CREATE TABLE IF NOT EXISTS org_members (
     UNIQUE(username, org)
 );
 
+-- Multi-instance bot status tracking
+CREATE TABLE IF NOT EXISTS bot_instances (
+    instance_id     TEXT PRIMARY KEY,
+    state           TEXT NOT NULL DEFAULT 'idle',
+    message         TEXT NOT NULL DEFAULT '',
+    jira_key        TEXT,
+    repo            TEXT,
+    cycle_start     TIMESTAMPTZ,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Migrate existing bot_status row into bot_instances (if instance_id is set)
+DO $$ BEGIN
+    INSERT INTO bot_instances (instance_id, state, message, jira_key, repo, cycle_start, updated_at)
+    SELECT instance_id, state, message, jira_key, repo, cycle_start, updated_at
+    FROM bot_status
+    WHERE id = 1 AND instance_id IS NOT NULL
+    ON CONFLICT (instance_id) DO NOTHING;
+EXCEPTION
+    WHEN undefined_table THEN NULL;
+END $$;
+
 -- Only create index if table has enough rows (ivfflat needs data)
 -- On first startup with empty table, queries fall back to sequential scan
 -- Re-run this after seeding data:

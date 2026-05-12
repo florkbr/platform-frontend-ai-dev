@@ -8,7 +8,7 @@ import Pagination from '../components/Pagination';
 
 const LIMIT = 20;
 
-export default function ArchivedTasks() {
+export default function ArchivedTasks({ instanceId }: { instanceId?: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -17,10 +17,10 @@ export default function ArchivedTasks() {
   const { onEvent } = useWS();
 
   const load = useCallback(async () => {
-    const res = await fetchTasks({ status: 'archived', limit: LIMIT, offset });
+    const res = await fetchTasks({ status: 'archived', limit: LIMIT, offset, instance_id: instanceId });
     setTasks(res.items || []);
     setTotal(res.total || 0);
-  }, [offset]);
+  }, [offset, instanceId]);
 
   useEffect(() => {
     load();
