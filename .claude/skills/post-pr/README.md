@@ -79,7 +79,6 @@ result = execute_post_pr_workflow(
     pr_number=123,
     ticket_id="RHCLOUD-456",
     summary="Add vector search caching",
-    github_token=None,  # Falls back to GITHUB_TOKEN env var
     slack_channel="#hcc-ai-assistant",
     reviewers=["user1", "user2"],
     skip_operations=[],

@@ -87,7 +87,9 @@ class WorkflowResult:
 
 
 class PostPROperations:
-    """Post-PR workflow operations (stub implementations)."""
+    """Post-PR workflow operations."""
+
+    CLI_TIMEOUT = 30
 
     def __init__(
         self,
@@ -103,14 +105,13 @@ class PostPROperations:
         self.memory_store_path.parent.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def _run_cli(args: List[str], input_data: Optional[str] = None) -> tuple:
+    def _run_cli(args: List[str], input_data: Optional[str] = None, timeout: int = CLI_TIMEOUT) -> tuple:
         """Run a CLI command and return (success, output)."""
         try:
-            r = subprocess.run(args, input=input_data, capture_output=True, text=True, timeout=30)
-            output = r.stdout.strip() or r.stderr.strip()
+            r = subprocess.run(args, input=input_data, capture_output=True, text=True, timeout=timeout)
             if r.returncode != 0:
-                return False, output
-            return True, output
+                return False, r.stderr.strip() or r.stdout.strip()
+            return True, r.stdout.strip()
         except Exception as e:
             return False, str(e)
 
@@ -118,15 +119,10 @@ class PostPROperations:
         """Parse a PR/MR URL into components."""
         parsed = urllib.parse.urlparse(pr_url)
         hostname = parsed.hostname or ""
+        path = parsed.path or ""
 
-        if hostname == "github.com":
-            parts = pr_url.rstrip("/").split("/")
-            if len(parts) < 5:
-                raise ValueError(f"Invalid GitHub PR URL: {pr_url}")
-            return {"host": "github", "owner": parts[-4], "repo": parts[-3]}
-
-        if hostname == "gitlab.com" or hostname == "gitlab.cee.redhat.com":
-            path_parts = parsed.path.split("/-/merge_requests/")
+        if "/-/merge_requests/" in path:
+            path_parts = path.split("/-/merge_requests/")
             if len(path_parts) != 2:
                 raise ValueError(f"Invalid GitLab MR URL: {pr_url}")
             project_path = path_parts[0].strip("/")
@@ -140,6 +136,12 @@ class PostPROperations:
                 "repo": repo,
                 "project_path": project_path,
             }
+
+        if hostname == "github.com":
+            parts = path.strip("/").split("/")
+            if len(parts) < 4 or parts[-2] != "pull":
+                raise ValueError(f"Invalid GitHub PR URL: {pr_url}")
+            return {"host": "github", "owner": parts[0], "repo": parts[1]}
 
         raise ValueError(f"Unsupported PR URL (not GitHub or GitLab): {pr_url}")
 

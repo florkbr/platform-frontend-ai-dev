@@ -587,6 +587,21 @@ class TestParseURL:
         assert info["repo"] == "backend"
         assert info["project_path"] == "service/platform/backend"
 
+    def test_parse_github_issues_url_rejected(self, operations):
+        """Test that GitHub issues URL is rejected (not a PR)."""
+        with pytest.raises(ValueError, match="Invalid GitHub PR URL"):
+            operations._parse_pr_url("https://github.com/org/repo/issues/123")
+
+    def test_parse_selfhosted_gitlab_url(self, operations):
+        """Test parsing self-hosted GitLab MR URL (detected by path pattern)."""
+        info = operations._parse_pr_url(
+            "https://gitlab.internal.example.com/team/project/-/merge_requests/10"
+        )
+        assert info["host"] == "gitlab"
+        assert info["hostname"] == "gitlab.internal.example.com"
+        assert info["owner"] == "team"
+        assert info["repo"] == "project"
+
     def test_parse_unsupported_url(self, operations):
         """Test parsing unsupported URL raises error."""
         with pytest.raises(ValueError, match="Unsupported PR URL"):
