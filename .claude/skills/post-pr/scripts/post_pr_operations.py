@@ -119,13 +119,13 @@ class PostPROperations:
         parsed = urllib.parse.urlparse(pr_url)
         hostname = parsed.hostname or ""
 
-        if "github.com" in hostname:
+        if hostname == "github.com":
             parts = pr_url.rstrip("/").split("/")
             if len(parts) < 5:
                 raise ValueError(f"Invalid GitHub PR URL: {pr_url}")
             return {"host": "github", "owner": parts[-4], "repo": parts[-3]}
 
-        if "gitlab" in hostname:
+        if hostname == "gitlab.com" or hostname == "gitlab.cee.redhat.com":
             path_parts = parsed.path.split("/-/merge_requests/")
             if len(path_parts) != 2:
                 raise ValueError(f"Invalid GitLab MR URL: {pr_url}")

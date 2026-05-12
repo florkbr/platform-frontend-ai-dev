@@ -187,8 +187,9 @@ class TestTaskUpdate:
         assert result.details["jira_ticket"] == "TICKET-GL1"
 
         labels_call = mock_run.call_args_list[0]
-        assert "--hostname" in labels_call[0][0]
-        assert "gitlab.cee.redhat.com" in labels_call[0][0]
+        cli_args = labels_call[0][0]
+        hostname_idx = cli_args.index("--hostname")
+        assert cli_args[hostname_idx + 1] == "gitlab.cee.redhat.com"
 
 
 class TestJiraTransitionIssue:
