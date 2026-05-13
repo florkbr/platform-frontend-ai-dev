@@ -167,11 +167,6 @@ RUN mkdir -p /home/botuser/.config/containers /home/botuser/.local/share/contain
     && echo -e '[registries.search]\nregistries = ["registry.access.redhat.com", "quay.io", "docker.io"]' \
        > /home/botuser/.config/containers/registries.conf
 
-# Git config (per-platform identity is set at runtime via includeIf)
-RUN git config --global http.https://gitlab.cee.redhat.com.sslVerify false \
-    && git config --global gpg.format openpgp \
-    && git config --global commit.gpgsign true
-
 # === INSTANCE CUSTOMIZATION ===
 # Runner repos extend the base image here via setup.sh and instance/ files.
 USER 0

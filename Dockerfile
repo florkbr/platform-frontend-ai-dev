@@ -165,11 +165,6 @@ RUN mkdir -p /home/botuser/.config/containers /home/botuser/.local/share/contain
        > /home/botuser/.config/containers/registries.conf
 
 
-# Git config (per-platform identity is set at runtime via includeIf)
-RUN git config --global http.https://gitlab.cee.redhat.com.sslVerify false \
-    && git config --global gpg.format openpgp \
-    && git config --global commit.gpgsign true
-
 # Fix ownership — botuser:0 + group-writable so OpenShift arbitrary UIDs (always GID 0) can write.
 # Must run last so it covers all dirs created above (.ssh, .config, .gitconfig, etc.)
 USER 0
