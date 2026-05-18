@@ -1,5 +1,7 @@
 """REST API endpoints for the web dashboard."""
 import json
+import logging
+import os
 from datetime import date as date_type
 
 from starlette.requests import Request
@@ -8,6 +10,8 @@ from starlette.responses import JSONResponse
 from .db import get_pool
 from .embeddings import embed
 from .events import Event, bus
+
+logger = logging.getLogger(__name__)
 
 
 async def api_tasks(request: Request) -> JSONResponse:
@@ -279,6 +283,66 @@ async def api_memory_delete(request: Request) -> JSONResponse:
         return JSONResponse({"error": f"Memory {memory_id} not found"}, status_code=404)
     await bus.publish(Event("memory_deleted", {"id": int(memory_id)}))
     return JSONResponse({"deleted": True, "id": int(memory_id)})
+
+
+async def api_memory_upload(request: Request) -> JSONResponse:
+    """POST /api/memories/upload — bulk upload memories with a shared secret."""
+    secret = os.environ.get("UPLOAD_MEMORY_PASSWORD")
+    if not secret:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer ") or auth[7:] != secret:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+
+    body = await request.json()
+    memories = body.get("memories", [])
+    if not memories:
+        return JSONResponse({"uploaded": 0, "errors": []})
+
+    pool = get_pool()
+    uploaded = 0
+    errors = []
+
+    for i, m in enumerate(memories):
+        try:
+            title = m["title"]
+            category = m["category"]
+            content = m["content"]
+            repo = m.get("repo")
+            jira_key = m.get("jira_key")
+            tags = m.get("tags", [])
+            metadata = m.get("metadata", {})
+
+            existing = await pool.fetchval(
+                "SELECT id FROM memories WHERE title = $1 AND category = $2 AND repo IS NOT DISTINCT FROM $3",
+                title, category, repo,
+            )
+            if existing:
+                errors.append({"index": i, "title": title, "reason": "duplicate"})
+                continue
+
+            vector = embed(f"{title}\n{content}")
+            row = await pool.fetchrow(
+                """
+                INSERT INTO memories (category, repo, jira_key, title, content, tags, embedding, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING *
+                """,
+                category, repo, jira_key, title, content,
+                tags or [],
+                vector,
+                json.dumps(metadata or {}),
+            )
+            await bus.publish(Event("memory_stored", {"id": row["id"], "title": title, "category": category}))
+            uploaded += 1
+        except KeyError as e:
+            errors.append({"index": i, "reason": f"missing field: {e}"})
+        except Exception as e:
+            errors.append({"index": i, "title": m.get("title", "?"), "reason": str(e)})
+
+    logger.info("Memory upload: %d uploaded, %d errors/skipped", uploaded, len(errors))
+    return JSONResponse({"uploaded": uploaded, "errors": errors})
 
 
 async def api_bot_status(request: Request) -> JSONResponse:
