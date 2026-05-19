@@ -105,7 +105,7 @@ def get_candidates():
     if sprint:
         jql = (
             f"project = RHCLOUD AND labels = {BOT_LABEL} "
-            f"AND assignee is EMPTY AND status IN ({status_list}) "
+            f"AND status IN ({status_list}) "
             f"AND sprint = {sprint['id']} "
             f"ORDER BY priority DESC, created ASC"
         )
