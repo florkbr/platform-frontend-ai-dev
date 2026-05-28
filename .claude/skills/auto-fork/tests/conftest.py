@@ -30,7 +30,7 @@ TEST_REPOS_CONFIG = {
 @pytest.fixture(autouse=True)
 def set_env_vars(monkeypatch):
     """Set required env vars for all tests."""
-    monkeypatch.setenv("BOT_GITHUB_USERNAME", TEST_BOT_USERNAME)
+    monkeypatch.setenv("GH_USER_NAME", TEST_BOT_USERNAME)
     monkeypatch.setenv("BOT_INSTANCE_ID", TEST_INSTANCE_ID)
     monkeypatch.setenv("BOT_CONFIG_PATH", "test-config")
 

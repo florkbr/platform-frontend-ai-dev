@@ -49,10 +49,10 @@ class TestDetectUnforkableRepos:
         assert len(gitlab_repos) == 0
 
     def test_detect_missing_username(self, monkeypatch):
-        """Test failure when BOT_GITHUB_USERNAME not set."""
-        monkeypatch.delenv("BOT_GITHUB_USERNAME", raising=False)
+        """Test failure when GH_USER_NAME not set."""
+        monkeypatch.delenv("GH_USER_NAME", raising=False)
 
-        with pytest.raises(ValueError, match="BOT_GITHUB_USERNAME"):
+        with pytest.raises(ValueError, match="GH_USER_NAME"):
             AutoForkOperations()
 
     def test_detect_missing_config_file(self, operations, tmp_path):

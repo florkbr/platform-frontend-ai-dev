@@ -30,25 +30,13 @@ python3 auto_fork.py --dry-run
 
 ## Configuration
 
-Required environment variables:
+Environment variables (auto-provided by bot runtime):
 
-```bash
-# Bot's GitHub username (required)
-# Must be a valid GitHub username (alphanumeric, hyphens, max 39 chars)
-export BOT_GITHUB_USERNAME=platex-rehor-bot
-```
+- `GH_USER_NAME` — bot GitHub username
+- `BOT_CONFIG_PATH` — config directory (default `rehor-config`)
+- `BOT_INSTANCE_ID` — optional instance ID (affects branch name)
 
-Optional environment variables:
-
-```bash
-# Instance ID (optional, affects branch name)
-export BOT_INSTANCE_ID=rehor
-
-# Config path (optional, defaults to "rehor-config")
-export BOT_CONFIG_PATH=rehor-config
-```
-
-The script validates that `BOT_GITHUB_USERNAME` follows GitHub username rules and will raise a `ValueError` early if validation fails.
+The script validates that `GH_USER_NAME` follows GitHub username rules and will raise a `ValueError` early if validation fails.
 
 ## Development
 
@@ -81,7 +69,7 @@ uv run ruff check .
 
 1. **detect_unforkable_repos** - Scans `project-repos.json`:
    - Identifies repos with `upstream` field
-   - Checks if `url` matches `BOT_GITHUB_USERNAME`
+   - Checks if `url` matches `GH_USER_NAME`
    - Skips repos already forked
    - Skips GitLab repos (GitHub only)
 

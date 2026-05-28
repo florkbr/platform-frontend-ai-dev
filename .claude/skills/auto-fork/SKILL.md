@@ -1,14 +1,9 @@
 ---
 name: auto-fork
 description: >
-  Automatically fork repos and update config. Detects repos in project-repos.json
-  without forks (or referenced in new instance configs without forks), creates forks
-  under bot's GitHub account, updates project-repos.json, and commits changes.
-  After running, use push-and-pr skill to create the PR.
+  Auto-fork repos + update config. Scans project-repos.json for missing forks → forks via gh → updates config → commits.
 when_to_use: >
-  Invoke during triage when a repo needs forking, or when setting up new instances.
-  Triggers on: "fork repo", "auto fork", "setup fork", "missing fork".
-  Replaces manual gh repo fork operations.
+  Triage when repo needs fork or setting up instances. Triggers: "fork repo", "auto fork", "setup fork", "missing fork".
 user-invocable: true
 allowed-tools:
   - "Bash(python3 .claude/skills/auto-fork/auto_fork.py *)"
@@ -35,30 +30,17 @@ GitLab repos are skipped with a logged notice (manual forking required).
 
 ## Configuration
 
-Required environment variables:
+Env vars (auto-provided by runtime):
 
-```bash
-# Bot's GitHub account (required) — username for fork destination
-# Must be a valid GitHub username (alphanumeric, hyphens, max 39 chars)
-export BOT_GITHUB_USERNAME=platex-rehor-bot
-```
-
-Optional environment variables:
-
-```bash
-# Instance ID (optional) — branch will be bot/auto-fork-{instance_id}
-export BOT_INSTANCE_ID=rehor
-
-# Config path (optional) — defaults to "rehor-config"
-export BOT_CONFIG_PATH=rehor-config
-```
+- `GH_USER_NAME` — bot GH username (fork destination)
+- `BOT_CONFIG_PATH` — config dir (default `rehor-config`)
+- `BOT_INSTANCE_ID` — instance ID (optional, for branch naming)
 
 ## Repo Detection
 
-Identifies repos needing forks:
-- Repos with `upstream` defined but `url` doesn't match bot's account pattern
-- For GitHub: checks if `url` contains `github.com/{BOT_GITHUB_USERNAME}/`
-- GitLab repos logged and skipped (no auto-fork support yet)
+Repos w/ `upstream` but `url` not matching bot account → need fork.
+- GH: check `url` contains `github.com/{GH_USER_NAME}/` → fork via `gh repo fork`
+- GL: logged + skipped (use `glab api` for manual fork)
 
 ## Workflow
 

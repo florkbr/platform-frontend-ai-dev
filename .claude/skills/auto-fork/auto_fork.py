@@ -80,7 +80,7 @@ class AutoForkOperations:
             ValueError: If required environment variables are invalid
         """
         self.dry_run = dry_run
-        self.bot_username = os.environ.get("BOT_GITHUB_USERNAME", "")
+        self.bot_username = os.environ.get("GH_USER_NAME", "")
         self.instance_id = os.environ.get("BOT_INSTANCE_ID", "")
         self.config_path = os.environ.get("BOT_CONFIG_PATH", "rehor-config")
 
@@ -115,7 +115,7 @@ class AutoForkOperations:
             ValueError: If validation fails
         """
         if not self.bot_username:
-            raise ValueError("BOT_GITHUB_USERNAME environment variable is required")
+            raise ValueError("GH_USER_NAME environment variable is required")
 
         # Validate GitHub username format (alphanumeric, hyphens, max 39 chars)
         if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$", self.bot_username):
