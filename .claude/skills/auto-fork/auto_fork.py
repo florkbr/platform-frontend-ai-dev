@@ -27,6 +27,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+# Import push-and-pr operations for direct integration
+sys.path.insert(0, str(Path(__file__).parent.parent / "push-and-pr" / "scripts"))
+from push_and_pr_operations import execute_push_and_pr_workflow
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -510,9 +514,53 @@ class AutoForkOperations:
                 message=error_msg,
             )
 
+    def push_and_create_pr(self, working_dir: Path, branch_name: str) -> OperationResult:
+        """
+        Push branch and create PR using push-and-pr workflow.
+
+        Args:
+            working_dir: Directory containing the git repo
+            branch_name: Name of the branch to push
+
+        Returns:
+            OperationResult with PR details
+        """
+        instance_label = self.instance_id or "bot"
+        title = f"chore: auto-fork repos for {instance_label}"
+        body = f"Forked {len(self.forked_repos)} repos:\n\n"
+        for name in self.forked_repos.keys():
+            body += f"- {name}\n"
+
+        logger.info("Pushing branch and creating PR...")
+
+        try:
+            exit_code = execute_push_and_pr_workflow(title=title, body=body, dry_run=self.dry_run, cwd=working_dir)
+
+            if exit_code != 0:
+                return OperationResult(
+                    operation="push_and_create_pr",
+                    status=OperationStatus.FAILED,
+                    message="Failed to push and create PR",
+                )
+
+            return OperationResult(
+                operation="push_and_create_pr",
+                status=OperationStatus.SUCCESS,
+                message="Successfully pushed branch and created PR",
+            )
+
+        except Exception as e:
+            error_msg = f"Failed to push and create PR: {e}"
+            logger.error(error_msg)
+            return OperationResult(
+                operation="push_and_create_pr",
+                status=OperationStatus.FAILED,
+                message=error_msg,
+            )
+
     def execute_workflow(self) -> List[OperationResult]:
         """
-        Execute the auto-fork workflow (without PR creation).
+        Execute the auto-fork workflow including PR creation.
 
         Returns:
             List of operation results
@@ -539,6 +587,18 @@ class AutoForkOperations:
         # 3. Update project-repos.json and commit
         result = self.update_and_commit()
         results.append(result)
+        if result.status == OperationStatus.FAILED:
+            return results
+        if result.status == OperationStatus.SKIPPED:
+            return results
+
+        # 4. Push and create PR
+        if result.details:
+            working_dir = Path(result.details.get("working_dir", "."))
+            branch_name = result.details.get("branch", "")
+
+            result = self.push_and_create_pr(working_dir, branch_name)
+            results.append(result)
 
         return results
 
@@ -575,17 +635,8 @@ def main():
         sys.exit(1)
     else:
         if not args.dry_run and results and results[-1].status == OperationStatus.SUCCESS:
-            # Extract working directory from last result
-            last_result = results[-1]
-            working_dir = last_result.details.get("working_dir", "") if last_result.details else ""
-
             logger.info("\n" + "=" * 60)
-            logger.info("✓ Changes committed successfully!")
-            logger.info("=" * 60)
-            logger.info("\nREQUIRED NEXT STEP:")
-            logger.info(f"  cd {working_dir}")
-            logger.info("  Then invoke /push-and-pr skill to create PR")
-            logger.info("\nWARNING: Without pushing PR, changes will be lost on pod restart!")
+            logger.info("✓ Auto-fork workflow completed successfully!")
             logger.info("=" * 60)
         sys.exit(0)
 

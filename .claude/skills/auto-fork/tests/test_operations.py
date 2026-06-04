@@ -285,7 +285,9 @@ class TestExecuteWorkflow:
         """Test workflow in dry run mode."""
         operations.dry_run = True
 
-        results = operations.execute_workflow()
+        # Mock push-and-pr workflow
+        with patch("auto_fork.execute_push_and_pr_workflow", return_value=0):
+            results = operations.execute_workflow()
 
         # Should complete all steps in dry run
         assert all(r.status in (OperationStatus.SUCCESS, OperationStatus.SKIPPED) for r in results)

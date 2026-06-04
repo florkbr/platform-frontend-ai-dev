@@ -48,16 +48,20 @@ class TestEndToEndWorkflow:
 
         mock_run.side_effect = mock_run_side_effect
 
-        results = integration_operations.execute_workflow()
+        # Mock push-and-pr workflow
+        with patch("auto_fork.execute_push_and_pr_workflow", return_value=0):
+            results = integration_operations.execute_workflow()
 
         # Verify all operations succeeded
-        assert len(results) == 3
+        assert len(results) == 4
         assert results[0].operation == "detect_unforkable_repos"
         assert results[0].status == OperationStatus.SUCCESS
         assert results[1].operation == "fork_repos"
         assert results[1].status == OperationStatus.SUCCESS
         assert results[2].operation == "update_and_commit"
         assert results[2].status == OperationStatus.SUCCESS
+        assert results[3].operation == "push_and_create_pr"
+        assert results[3].status == OperationStatus.SUCCESS
 
         # Verify repos were forked (includes GitLab repo now)
         assert len(integration_operations.forked_repos) == 2
@@ -246,7 +250,9 @@ class TestDryRunMode:
 
         original_config = integration_operations.project_repos_path.read_text()
 
-        results = integration_operations.execute_workflow()
+        # Mock push-and-pr workflow
+        with patch("auto_fork.execute_push_and_pr_workflow", return_value=0):
+            results = integration_operations.execute_workflow()
 
         # Verify no changes to config
         updated_config = integration_operations.project_repos_path.read_text()

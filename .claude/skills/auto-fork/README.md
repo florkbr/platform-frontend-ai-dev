@@ -13,22 +13,17 @@ Automatically fork repos and update configuration. Detects repos in `project-rep
 
 ### Basic Workflow
 
-This is a two-step process:
+Fully automated single-step process:
 
-**Step 1: Fork and commit**
 ```bash
 python3 auto_fork.py
 ```
 
-The script outputs the working directory path.
-
-**Step 2: Push and create PR (REQUIRED)**
-```bash
-cd <working_dir_from_step_1>
-# Then invoke /push-and-pr skill
-```
-
-Without step 2, local changes are lost on pod restart (config repo re-cloned fresh each cycle).
+The script handles everything end-to-end:
+1. Detects repos needing forks
+2. Creates forks via gh/glab CLI
+3. Updates project-repos.json and commits to new branch
+4. Automatically pushes and creates PR to config repo
 
 ### Dry Run
 
