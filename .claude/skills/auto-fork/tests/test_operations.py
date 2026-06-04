@@ -14,7 +14,7 @@ from auto_fork import (
     OperationStatus,
     RepoInfo,
 )
-from tests.conftest import GITLAB_HOST
+from tests.conftest import GITLAB_HOST, HOST_GITHUB, HOST_GITLAB
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ class TestDetectUnforkableRepos:
         result = operations.detect_unforkable_repos()
 
         assert result.status == OperationStatus.SUCCESS
-        gitlab_repos = [r for r in operations.repos_to_fork if r.host == "gitlab"]
+        gitlab_repos = [r for r in operations.repos_to_fork if r.host == HOST_GITLAB]
         assert len(gitlab_repos) == 1
         assert gitlab_repos[0].name == "gitlab-repo"
 
@@ -95,7 +95,7 @@ class TestForkRepos:
                 name="test-repo",
                 upstream="https://github.com/TestOrg/test-repo.git",
                 current_url=None,
-                host="github",
+                host=HOST_GITHUB,
             )
         ]
 
@@ -116,7 +116,7 @@ class TestForkRepos:
                 name="existing-repo",
                 upstream="https://github.com/TestOrg/existing-repo.git",
                 current_url=None,
-                host="github",
+                host=HOST_GITHUB,
             )
         ]
 
@@ -135,7 +135,7 @@ class TestForkRepos:
                 name="fail-repo",
                 upstream="https://github.com/TestOrg/fail-repo.git",
                 current_url=None,
-                host="github",
+                host=HOST_GITHUB,
             )
         ]
 
@@ -163,7 +163,7 @@ class TestForkRepos:
                 name="gitlab-repo",
                 upstream=f"https://{GITLAB_HOST}/TestOrg/gitlab-repo.git",
                 current_url=None,
-                host="gitlab",
+                host=HOST_GITLAB,
             )
         ]
 
@@ -191,7 +191,7 @@ class TestForkRepos:
                 name="test-repo",
                 upstream="https://github.com/TestOrg/test-repo.git",
                 current_url=None,
-                host="github",
+                host=HOST_GITHUB,
             )
         ]
 

@@ -9,6 +9,8 @@ import pytest
 TEST_BOT_USERNAME = "test-bot"
 TEST_INSTANCE_ID = "test-instance"
 GITLAB_HOST = "gitlab.cee.redhat.com"  # Match constant from auto_fork.py
+HOST_GITHUB = "github"  # Match constant from auto_fork.py
+HOST_GITLAB = "gitlab"  # Match constant from auto_fork.py
 
 # Test data - repos configuration for fixtures
 TEST_REPOS_CONFIG = {
@@ -23,7 +25,7 @@ TEST_REPOS_CONFIG = {
     "gitlab-repo": {
         "url": f"https://{GITLAB_HOST}/other-user/gitlab-repo.git",
         "upstream": f"https://{GITLAB_HOST}/TestOrg/gitlab-repo.git",
-        "host": "gitlab",
+        "host": HOST_GITLAB,
     },
 }
 

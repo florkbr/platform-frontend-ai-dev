@@ -3,15 +3,15 @@
 Auto-fork workflow for repos in project-repos.json.
 
 Detects repos without forks, creates forks under bot's GitHub or GitLab account,
-and updates project-repos.json locally. After committing changes, use
-push-and-pr skill to create the PR.
+updates project-repos.json, and creates PR automatically.
 
 Operations:
 1. detect_unforkable_repos - scan for repos needing forks
 2. fork_repos - create forks using gh repo fork (GitHub) or glab repo fork (GitLab)
 3. update_and_commit - update project-repos.json and commit changes
+4. push_and_create_pr - push branch and create PR (integrated push-and-pr workflow)
 
-After this script completes, use push-and-pr skill to create the PR.
+Fully automated end-to-end workflow.
 """
 
 import argparse
@@ -42,6 +42,22 @@ REMOTE_CONFIG_DIR = DATA_DIR / "remote-config"
 
 # GitLab hostname constant
 GITLAB_HOST = "gitlab.cee.redhat.com"
+
+# Host type constants
+HOST_GITHUB = "github"
+HOST_GITLAB = "gitlab"
+
+# Timeout constants (seconds)
+FORK_TIMEOUT = 30
+GIT_TIMEOUT = 30
+GIT_SYMBOLIC_REF_TIMEOUT = 10
+
+# Default branch fallback
+DEFAULT_BRANCH_FALLBACK = "master"
+
+# Validation patterns
+GITHUB_USERNAME_PATTERN = r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$"
+FORK_EXISTS_PATTERNS = ["already exists", "already forked"]
 
 
 class OperationStatus(Enum):
@@ -125,8 +141,12 @@ class AutoForkOperations:
             raise ValueError("GH_USER_NAME environment variable is required")
 
         # Validate GitHub username format (alphanumeric, hyphens, max 39 chars)
-        if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$", self.bot_username):
+        if not re.match(GITHUB_USERNAME_PATTERN, self.bot_username):
             raise ValueError(f"Invalid GitHub username: {self.bot_username}")
+
+        # Warn if GL_USER_NAME not set (needed for GitLab repos)
+        if not self.gl_username:
+            logger.warning("GL_USER_NAME not set - GitLab repo forking will fail")
 
         if not self.config_path:
             raise ValueError("BOT_CONFIG_PATH cannot be empty")
@@ -172,16 +192,16 @@ class AutoForkOperations:
         for name, config in repos_config.items():
             upstream = config.get("upstream")
             current_url = config.get("url")
-            host = config.get("host", "github")  # default to github
+            host = config.get("host", HOST_GITHUB)  # default to github
 
             if not upstream:
                 continue  # No upstream = not a fork, skip
 
             # Determine host from upstream URL if not specified
             if "gitlab" in upstream.lower():
-                host = "gitlab"
+                host = HOST_GITLAB
             elif "github" in upstream.lower():
-                host = "github"
+                host = HOST_GITHUB
 
             # Check if URL already points to bot's fork
             bot_user = self.gl_username if host == "gitlab" else self.bot_username
@@ -225,12 +245,12 @@ class AutoForkOperations:
 
         Args:
             repo_name: Name of the repository
-            host: Host type ("github" or "gitlab")
+            host: Host type (HOST_GITHUB or HOST_GITLAB)
 
         Returns:
             Fork URL in appropriate format for the host
         """
-        if host == "gitlab":
+        if host == HOST_GITLAB:
             return f"https://{GITLAB_HOST}/{self.gl_username}/{repo_name}.git"
         return f"https://github.com/{self.bot_username}/{repo_name}.git"
 
@@ -280,7 +300,7 @@ class AutoForkOperations:
 
             try:
                 # Build fork command based on host
-                if repo.host == "gitlab":
+                if repo.host == HOST_GITLAB:
                     # glab repo fork --clone=false --hostname <GITLAB_HOST> <project>
                     cmd = [
                         "glab",
@@ -299,12 +319,12 @@ class AutoForkOperations:
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=30,
+                    timeout=FORK_TIMEOUT,
                 )
 
                 if result.returncode != 0:
                     # Check if already forked (not an error)
-                    if "already exists" in result.stderr.lower() or "already forked" in result.stderr.lower():
+                    if any(pattern in result.stderr.lower() for pattern in FORK_EXISTS_PATTERNS):
                         logger.info(f"{path} already forked")
                         self._record_fork(repo.name, repo.host)
                     else:
@@ -371,11 +391,11 @@ class AutoForkOperations:
             ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=GIT_SYMBOLIC_REF_TIMEOUT,
         )
         if result.returncode == 0:
             return result.stdout.strip().split("/")[-1]
-        return "master"
+        return DEFAULT_BRANCH_FALLBACK
 
     def _create_feature_branch(self) -> Tuple[str, Path]:
         """
@@ -395,7 +415,7 @@ class AutoForkOperations:
             cwd=config_work_dir,
             check=True,
             capture_output=True,
-            timeout=30,
+            timeout=GIT_TIMEOUT,
         )
 
         default_branch = self._get_default_branch()
