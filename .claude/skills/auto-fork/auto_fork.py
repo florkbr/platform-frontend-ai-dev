@@ -151,6 +151,35 @@ class AutoForkOperations:
         if not self.config_path:
             raise ValueError("BOT_CONFIG_PATH cannot be empty")
 
+    def _detect_host_from_url(self, url: str) -> str:
+        """
+        Detect host type from URL.
+
+        Args:
+            url: Repository URL
+
+        Returns:
+            Host type (HOST_GITHUB or HOST_GITLAB)
+        """
+        url_lower = url.lower()
+        if "gitlab" in url_lower:
+            return HOST_GITLAB
+        elif "github" in url_lower:
+            return HOST_GITHUB
+        return HOST_GITHUB  # default
+
+    def _should_stop_workflow(self, result: OperationResult) -> bool:
+        """
+        Check if workflow should stop based on operation result.
+
+        Args:
+            result: Operation result to check
+
+        Returns:
+            True if workflow should stop, False otherwise
+        """
+        return result.status in (OperationStatus.FAILED, OperationStatus.SKIPPED)
+
     def detect_unforkable_repos(self) -> OperationResult:
         """
         Scan project-repos.json for repos needing forks.
@@ -198,10 +227,7 @@ class AutoForkOperations:
                 continue  # No upstream = not a fork, skip
 
             # Determine host from upstream URL if not specified
-            if "gitlab" in upstream.lower():
-                host = HOST_GITLAB
-            elif "github" in upstream.lower():
-                host = HOST_GITHUB
+            host = self._detect_host_from_url(upstream)
 
             # Check if URL already points to bot's fork
             bot_user = self.gl_username if host == "gitlab" else self.bot_username
@@ -590,26 +616,21 @@ class AutoForkOperations:
         # 1. Detect repos needing forks
         result = self.detect_unforkable_repos()
         results.append(result)
-        if result.status == OperationStatus.FAILED:
-            return results
-        if result.status == OperationStatus.SKIPPED:
-            logger.info("No repos need forking. Workflow complete.")
+        if self._should_stop_workflow(result):
+            if result.status == OperationStatus.SKIPPED:
+                logger.info("No repos need forking. Workflow complete.")
             return results
 
         # 2. Fork repos
         result = self.fork_repos()
         results.append(result)
-        if result.status == OperationStatus.FAILED:
-            return results
-        if result.status == OperationStatus.SKIPPED:
+        if self._should_stop_workflow(result):
             return results
 
         # 3. Update project-repos.json and commit
         result = self.update_and_commit()
         results.append(result)
-        if result.status == OperationStatus.FAILED:
-            return results
-        if result.status == OperationStatus.SKIPPED:
+        if self._should_stop_workflow(result):
             return results
 
         # 4. Push and create PR
