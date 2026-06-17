@@ -1,6 +1,5 @@
 """Tests for cycle-runs REST API and MCP tools."""
 
-import asyncio
 import base64
 import json
 from datetime import datetime, timezone
