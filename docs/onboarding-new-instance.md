@@ -288,7 +288,15 @@ For more schedule examples (US hours, weekends, split windows, etc.) and details
 
 ## Step 3: Konflux CI/CD
 
-Follow the Konflux onboarding guide to register your repo. Key config:
+**This step must be completed before Step 4 (app-interface).** App-interface references the Quay image built by Konflux — if the image doesn't exist or isn't public, the deployment will fail.
+
+Follow the Konflux onboarding rules to register your repo. The key requirements:
+
+1. **Onboard your repo to Konflux** — follow the standard Konflux onboarding process for your tenant namespace
+2. **Configure a ReleasePlan** — your component needs a ReleasePlan and corresponding ReleasePlanAdmission so that push builds produce a release to your Quay prod repo
+3. **Make the image public** — the final Quay image must be public so OpenShift can pull it without an image pull secret. Go to your Quay repo → Settings → Repository Visibility → Make Public
+
+Pipeline config:
 
 ```yaml
 # .tekton/my-bot-push.yaml (and pull-request.yaml)
@@ -299,7 +307,7 @@ path-context: .
 Konflux auto-generates the `.tekton/` pipeline files when you onboard. The important bits:
 - Dockerfile path points to `dev-bot/Dockerfile.runner` (the submodule)
 - Build context is `.` (the runner repo root)
-- Push builds go to your Quay prod repo
+- Push builds go to your Quay prod repo (via the ReleasePlan)
 - PR builds go to `quay.io/redhat-user-workloads/...` with 5-day expiry
 
 ### Reference PRs
