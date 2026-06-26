@@ -522,10 +522,10 @@ When changes span multiple repos, merge in this order:
 2. **dev-bot** (core changes) — second
 3. **runner instance** (submodule bump) — last, after dev-bot merges
 
-### Shared Jira identity
-By default, all bot instances share the same Jira credentials (`devbot-secrets/jira-email`). The bot cannot filter comments by author — it identifies its own comments by content patterns (structured reports, PR links, tables), not by username.
+### Shared identities
+All bot instances share credentials from `devbot-secrets` — Jira, GitHub, GitLab, GPG, and GCP. This means all instances push code, open PRs, and comment on Jira as the same user. The bot identifies its own Jira comments by content patterns (structured reports, PR links, tables), not by username.
 
-If your instance needs a different Jira identity (e.g. access to a restricted project), deploy a per-instance proxy with custom credentials. See the **Shared vs Per-Instance Proxy** table in Step 2 and **Vault Secrets** in Step 4.
+Each instance needs its own Jira credentials and proxy container (see **Vault Secrets** in Step 4). The same applies to GitHub/GitLab identities — if your instance needs to push as a different user, you'll need separate PATs in your Vault secret.
 
 ### `BOT_BOARD_NAME` is fragile
 If someone renames the Jira board, `claim-ticket` breaks. Consider using `BOT_BOARD_ID` (stable numeric ID) instead. The ticket query (`new-work`) doesn't use the board at all — it's label-only with `sprint in openSprints()`.
