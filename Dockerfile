@@ -149,6 +149,8 @@ COPY config.json CLAUDE.md .mcp.json entrypoint.sh ./
 COPY .claude/ .claude/
 COPY presets/ presets/
 
+# Run env preset install scripts (no-op until presets are extracted)
+RUN for script in presets/envs/*/install.sh; do [ -f "$script" ] && bash "$script"; done
 
 ENV HOME=/home/botuser
 USER botuser
