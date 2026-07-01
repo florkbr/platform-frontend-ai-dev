@@ -313,6 +313,8 @@ This is a separate follow-up — both paths can coexist during migration.
 | `TestGitAuthProxy_Healthz` | `/healthz` → 200 |
 | `TestGitAuthProxy_LargeBody` | Simulated pack push (large POST body) → forwarded correctly |
 | `TestGitAuthProxy_MissingToken` | Host configured but env var empty → 503 |
+| `TestGitAuthProxy_EncodedHost` | `/%67ithub.com/org/repo` or `/github.com%2F..%2Fevil.com/...` → 403 (not in registry after decode) |
+| `TestGitAuthProxy_PathTraversal` | `/github.com/../evil.com/org/repo` → 403 (cleaned path doesn't match registry) |
 
 ### Integration Tests
 
