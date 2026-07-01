@@ -55,23 +55,42 @@ def get_capacity():
 
 
 def gh_pr(owner_repo, num):
+    owner, repo = owner_repo.split("/", 1)
+    query = """
+query($owner:String!,$repo:String!,$num:Int!){
+  repository(owner:$owner,name:$repo){
+    pullRequest(number:$num){
+      state url title isDraft
+      mergeable reviewDecision
+      reviews(last:20){nodes{state body submittedAt author{login}}}
+      commits(last:1){nodes{commit{statusCheckRollup{contexts(last:50){nodes{
+        ...on CheckRun{name conclusion status}
+        ...on StatusContext{context state}
+      }}}}}}
+    }
+  }
+}"""
     try:
         r = subprocess.run(
             [
-                "gh",
-                "pr",
-                "view",
-                str(num),
-                "--repo",
-                owner_repo,
-                "--json",
-                "state,mergeable,statusCheckRollup,reviewDecision,reviews,url,title,isDraft",
+                "gh", "api", "graphql",
+                "-F", f"owner={owner}",
+                "-F", f"repo={repo}",
+                "-F", f"num={num}",
+                "-f", f"query={query}",
             ],
-            capture_output=True,
-            text=True,
-            timeout=15,
+            capture_output=True, text=True, timeout=20,
         )
-        return json.loads(r.stdout) if r.returncode == 0 else None
+        if r.returncode != 0:
+            return None
+        pr = json.loads(r.stdout).get("data", {}).get("repository", {}).get("pullRequest")
+        if not pr:
+            return None
+        nodes = (pr.get("commits", {}).get("nodes") or [{}])
+        rollup = nodes[-1].get("commit", {}).get("statusCheckRollup") or {}
+        pr["statusCheckRollup"] = rollup.get("contexts", {}).get("nodes") or []
+        pr["reviews"] = pr.get("reviews", {}).get("nodes") or []
+        return pr
     except Exception:
         return None
 
@@ -107,13 +126,14 @@ def gh_pr_comments(owner_repo, num):
                 [
                     "gh",
                     "api",
+                    "--paginate",
                     ep,
                     "--jq",
                     ".[] | {a: .user.login, t: .created_at, b: .body}",
                 ],
                 capture_output=True,
                 text=True,
-                timeout=15,
+                timeout=30,
             )
             if r.returncode == 0 and r.stdout.strip():
                 for line in r.stdout.strip().split("\n"):
@@ -429,7 +449,7 @@ def has_new_jira_feedback(e):
     last_addr = e["task"].get("last_addressed", "")
     for c in e["jira_comments"]:
         ct = c.get("created", "")[:16]
-        if last_addr and ct > last_addr[:16]:
+        if not last_addr or ct > last_addr[:16]:
             body = c.get("body", "")
             if not ("### " in body or "| " in body or "PR:" in body):
                 return True

@@ -35,7 +35,7 @@ def has_new_jira_feedback(jira_comments, last_addressed):
     """Check if there's new human feedback in Jira comments since last_addressed."""
     for c in jira_comments:
         ct = c.get("created", "")[:16]
-        if last_addressed and ct > last_addressed[:16]:
+        if not last_addressed or ct > last_addressed[:16]:
             body = c.get("body", "")
             if not ("### " in body or "| " in body or "PR:" in body):
                 return True
