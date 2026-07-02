@@ -20,7 +20,6 @@ from common import (
     get_task_prs,
     get_tasks,
     load_project_repos,
-    load_state,
     output_result,
     save_state,
 )
@@ -277,10 +276,7 @@ def main():
                 jira_comments = (jira.get("fields", {}).get("comment", {}).get("comments") or [])[-10:]
 
             is_interrupted = (
-                t.get("status") == "in_progress"
-                and not t.get("pr_number")
-                and not meta.get("prs")
-                and not prs
+                t.get("status") == "in_progress" and not t.get("pr_number") and not meta.get("prs") and not prs
             )
 
             if _has_new_jira_feedback(jira_comments, t.get("last_addressed", "")):

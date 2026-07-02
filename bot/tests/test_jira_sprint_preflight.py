@@ -3,7 +3,6 @@
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,7 +15,6 @@ from jira_sprint_preflight import (  # noqa: E402
     _has_new_jira_feedback,
     main,
 )
-
 
 # --- _has_new_jira_feedback ---
 
@@ -113,13 +111,17 @@ def test_no_active_with_candidates_returns_start(env_vars, monkeypatch, capsys):
 
 
 def test_active_with_feedback_returns_start(env_vars, monkeypatch, capsys):
-    tasks = _mock_tasks(active=[{
-        "external_key": "TEST-2",
-        "status": "pr_open",
-        "repo": "my-repo",
-        "last_addressed": "2026-06-30T10:00:00",
-        "metadata": {"prs": [{"repo": "my-repo", "number": 1, "host": "github"}]},
-    }])
+    tasks = _mock_tasks(
+        active=[
+            {
+                "external_key": "TEST-2",
+                "status": "pr_open",
+                "repo": "my-repo",
+                "last_addressed": "2026-06-30T10:00:00",
+                "metadata": {"prs": [{"repo": "my-repo", "number": 1, "host": "github"}]},
+            }
+        ]
+    )
     jira_data = {
         "fields": {
             "status": {"name": "In Progress"},
@@ -127,7 +129,11 @@ def test_active_with_feedback_returns_start(env_vars, monkeypatch, capsys):
             "issuelinks": [],
             "comment": {
                 "comments": [
-                    {"created": "2026-07-01T10:00:00", "body": "Can you check this?", "author": {"displayName": "Human"}}
+                    {
+                        "created": "2026-07-01T10:00:00",
+                        "body": "Can you check this?",
+                        "author": {"displayName": "Human"},
+                    }
                 ]
             },
         }
@@ -144,13 +150,17 @@ def test_active_with_feedback_returns_start(env_vars, monkeypatch, capsys):
 
 
 def test_active_all_clean_returns_skip(env_vars, monkeypatch, capsys):
-    tasks = _mock_tasks(active=[{
-        "external_key": "TEST-3",
-        "status": "pr_open",
-        "repo": "my-repo",
-        "last_addressed": "2026-07-01T12:00:00",
-        "metadata": {"prs": [{"repo": "my-repo", "number": 1, "host": "github"}]},
-    }])
+    tasks = _mock_tasks(
+        active=[
+            {
+                "external_key": "TEST-3",
+                "status": "pr_open",
+                "repo": "my-repo",
+                "last_addressed": "2026-07-01T12:00:00",
+                "metadata": {"prs": [{"repo": "my-repo", "number": 1, "host": "github"}]},
+            }
+        ]
+    )
     jira_data = {
         "fields": {
             "status": {"name": "Code Review"},
@@ -223,12 +233,16 @@ def test_missing_instance_id_returns_error(monkeypatch, capsys):
 
 
 def test_interrupted_task_returns_start(env_vars, monkeypatch, capsys):
-    tasks = _mock_tasks(active=[{
-        "external_key": "TEST-5",
-        "status": "in_progress",
-        "repo": "my-repo",
-        "metadata": {"last_step": "implemented"},
-    }])
+    tasks = _mock_tasks(
+        active=[
+            {
+                "external_key": "TEST-5",
+                "status": "in_progress",
+                "repo": "my-repo",
+                "metadata": {"last_step": "implemented"},
+            }
+        ]
+    )
     jira_data = {
         "fields": {
             "status": {"name": "In Progress"},
