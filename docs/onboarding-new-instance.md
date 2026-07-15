@@ -488,7 +488,7 @@ After deploying, verify in order:
 | `BOT_BOARD_NAME` | no | Jira board name (for sprint assignment only) |
 | `BOT_SPRINT_PREFIX` | no | Sprint name prefix filter (for sprint assignment only) |
 | `BOT_INCLUDE_BACKLOG` | no | `'true'` to include backlog tickets |
-| `SLACK_WEBHOOK_URL` | no | Slack webhook for notifications |
+| `SLACK_WEBHOOK_URL` | no | Slack webhook — Incoming (`/services/`, recommended) or Workflow Builder (`/triggers/`) |
 | `PROXY_IMAGE` | no | Proxy container image (only needed if `PROXY_REPLICAS=1`) |
 | `PROXY_IMAGE_TAG` | no | Proxy image tag (default: `latest`) |
 | `PROXY_REPLICAS` | no | `'0'` = use shared proxy (default), `'1'` = deploy own proxy |

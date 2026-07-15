@@ -54,8 +54,12 @@ def register_slack_tools(mcp: FastMCP):
             }
 
         try:
+            if "/services/" in webhook_url:
+                payload = {"text": message}
+            else:
+                payload = {"msg": message}
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(webhook_url, json={"msg": message})
+                resp = await client.post(webhook_url, json=payload)
                 resp.raise_for_status()
         except Exception as e:
             logger.error("Slack webhook failed: %s", e)

@@ -101,7 +101,7 @@ These MCP servers must be available (typically via the shared proxy):
 | `BOT_BOARD_ID` or `BOT_BOARD_NAME` | Jira board for sprint assignment | Skip sprint assignment |
 | `BOT_SPRINT_PREFIX` | Sprint name filter (e.g. `"Framework"`) | No filter |
 | `BOT_INCLUDE_BACKLOG` | Include backlog tickets in search | `false` |
-| `SLACK_WEBHOOK_URL` | Slack webhook for notifications | No notifications |
+| `SLACK_WEBHOOK_URL` | Slack webhook — Incoming (`/services/`) or Workflow Builder (`/triggers/`) | No notifications |
 
 ### Directory Structure
 
