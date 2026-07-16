@@ -356,6 +356,13 @@ function CycleRunDetail({
           </div>
         )}
 
+        {run.input_prompt && (
+          <div className="detail-section">
+            <span className="detail-label">Input Prompt</span>
+            <pre className="input-prompt-content">{run.input_prompt}</pre>
+          </div>
+        )}
+
         {run.has_transcript ? (
           <div className="detail-section">
             <span className="detail-label">Transcript</span>

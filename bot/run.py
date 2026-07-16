@@ -436,7 +436,12 @@ def main() -> None:
                 if preflight_result.action == "error":
                     consecutive_preflight_errors += 1
                     logger.error("Preflight error (consecutive: %d)", consecutive_preflight_errors)
-                    post_orphan_cycle(instance_id or args.label, "error", preflight_result.transcript)
+                    post_orphan_cycle(
+                        instance_id or args.label,
+                        "error",
+                        preflight_result.transcript,
+                        input_prompt=preflight_result.transcript,
+                    )
                     error_sleep = min(config.interval * (2**consecutive_preflight_errors), 300)
                     _write_sleep_signal(error_sleep, "preflight_error")
                     _read_sleep_signal(config, instance_id)
@@ -446,7 +451,12 @@ def main() -> None:
                 if preflight_result.action == "skip":
                     consecutive_preflight_errors = 0
                     logger.info("Preflight skip — no session needed")
-                    post_orphan_cycle(instance_id or args.label, "idle", preflight_result.transcript)
+                    post_orphan_cycle(
+                        instance_id or args.label,
+                        "idle",
+                        preflight_result.transcript,
+                        input_prompt=preflight_result.transcript,
+                    )
                     _write_sleep_signal(300, "preflight_skip")
                     _read_sleep_signal(config, instance_id)
                     cleanup_between_cycles(SCRIPT_DIR)
@@ -494,6 +504,7 @@ def main() -> None:
                     ctx=ctx,
                     cwd=str(SCRIPT_DIR),
                     instance_id=instance_id,
+                    input_prompt=preflight_prompt,
                 )
             else:
                 logger.warning("Cycle produced no result")

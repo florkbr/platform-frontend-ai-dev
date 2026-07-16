@@ -135,6 +135,7 @@ export interface CycleRun {
   tool_calls: number | null;
   tokens_used: number | null;
   progress: Record<string, any>;
+  input_prompt: string | null;
   created_at: string;
   has_transcript?: boolean;
 }

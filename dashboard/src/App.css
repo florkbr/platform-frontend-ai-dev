@@ -1497,6 +1497,21 @@ select:focus,
 }
 .btn-toggle-raw.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+.input-prompt-content {
+  background: #0d1520;
+  color: #8b949e;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid #1f6feb;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 4px;
+}
+
 .transcript-raw {
   background: #010409;
   color: #c9d1d9;
