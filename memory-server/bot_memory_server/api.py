@@ -805,7 +805,7 @@ async def api_stats(request: Request) -> JSONResponse:
 
 _CYCLE_RUN_LIST_COLUMNS = (
     "id, task_id, cycle_type, instance_id, started_at, finished_at, "
-    "tool_calls, tokens_used, progress, created_at, "
+    "tool_calls, tokens_used, progress, input_prompt, created_at, "
     "(transcript IS NOT NULL) AS has_transcript"
 )
 
@@ -904,6 +904,7 @@ async def api_cycle_runs_add(request: Request) -> JSONResponse:
     parsed_finished = datetime.fromisoformat(finished_at) if finished_at else None
 
     instance_id_val = body.get("instance_id")
+    input_prompt = body.get("input_prompt")
 
     # When uploading a transcript, attach it to the most recent cycle_run
     # for this specific instance that has no transcript yet (created by
@@ -917,7 +918,8 @@ async def api_cycle_runs_add(request: Request) -> JSONResponse:
                 finished_at = COALESCE($2, finished_at, NOW()),
                 tool_calls = COALESCE($3, tool_calls),
                 tokens_used = COALESCE($4, tokens_used),
-                task_id = COALESCE(task_id, $5)
+                task_id = COALESCE(task_id, $5),
+                input_prompt = COALESCE($7, input_prompt)
             WHERE id = (
                 SELECT id FROM cycle_runs
                 WHERE instance_id = $6
@@ -934,14 +936,15 @@ async def api_cycle_runs_add(request: Request) -> JSONResponse:
             body.get("tokens_used"),
             task_id,
             instance_id_val,
+            input_prompt,
         )
 
     if row is None:
         row = await pool.fetchrow(
             f"""
             INSERT INTO cycle_runs (task_id, cycle_type, instance_id, started_at, finished_at,
-                                    tool_calls, tokens_used, progress, transcript)
-            VALUES ($1, $2, $3, COALESCE($4, NOW()), $5, $6, $7, $8, $9)
+                                    tool_calls, tokens_used, progress, transcript, input_prompt)
+            VALUES ($1, $2, $3, COALESCE($4, NOW()), $5, $6, $7, $8, $9, $10)
             RETURNING {_CYCLE_RUN_LIST_COLUMNS}
             """,
             task_id,
@@ -953,6 +956,7 @@ async def api_cycle_runs_add(request: Request) -> JSONResponse:
             body.get("tokens_used"),
             json.dumps(progress or {}),
             transcript_bytes,
+            input_prompt,
         )
     result = _cycle_run(row)
     result["has_transcript"] = transcript_bytes is not None
@@ -1201,6 +1205,7 @@ def _cycle_run(row) -> dict:
         "tool_calls": row["tool_calls"],
         "tokens_used": row["tokens_used"],
         "progress": json.loads(row["progress"]) if isinstance(row["progress"], str) else (row["progress"] or {}),
+        "input_prompt": row.get("input_prompt"),
         "created_at": row["created_at"].isoformat(),
         "has_transcript": bool(row.get("has_transcript", False)),
     }

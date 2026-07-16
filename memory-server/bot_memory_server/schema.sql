@@ -170,9 +170,12 @@ CREATE TABLE IF NOT EXISTS cycle_runs (
     tokens_used     INTEGER,
     progress        JSONB,
     transcript      BYTEA,
+    input_prompt    TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Migration: add input_prompt to existing cycle_runs tables
+ALTER TABLE cycle_runs ADD COLUMN IF NOT EXISTS input_prompt TEXT;
 
 -- Only create index if table has enough rows (ivfflat needs data)
 -- On first startup with empty table, queries fall back to sequential scan
