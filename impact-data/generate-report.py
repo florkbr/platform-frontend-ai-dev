@@ -39,9 +39,7 @@ def render_orgs_table(orgs):
             else f"[{r['repo'].split('/')[-1]}](https://github.com/{r['repo']}) ({r['count']})"
             for r in org.get("notable_repos", [])
         )
-        lines.append(
-            f"| [{org['org']}]({org['url']}) | {org['count']} | {notable} |"
-        )
+        lines.append(f"| [{org['org']}]({org['url']}) | {org['count']} | {notable} |")
     return "\n".join(lines)
 
 
@@ -67,9 +65,7 @@ def render_ticket_types_table(types):
     for t in types:
         label = type_labels.get(t["type"], t["type"])
         jql_type = t["type"].replace(" ", "%20")
-        lines.append(
-            f"| [{label}]({jql_base}{jql_type}) | {t['count']} |"
-        )
+        lines.append(f"| [{label}]({jql_base}{jql_type}) | {t['count']} |")
     return "\n".join(lines)
 
 
@@ -132,15 +128,14 @@ def build_vars(stats):
     jql_base = "https://redhat.atlassian.net/issues/?jql=filter%3D107017%20AND%20issuetype%3D"
     for t in stats.get("ticket_types", []):
         jql_type = t["type"].replace(" ", "%20")
-        v[f"ticket_type_{t['type']}"] = (
-            f"[{t['count']}]({jql_base}{jql_type})"
-        )
+        v[f"ticket_type_{t['type']}"] = f"[{t['count']}]({jql_base}{jql_type})"
 
     return v
 
 
 def render_template(template_text, variables):
     """Replace {{var}} placeholders with values from the variables dict."""
+
     def replacer(match):
         key = match.group(1)
         val = variables.get(key)
@@ -154,12 +149,21 @@ def render_template(template_text, variables):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate impact assessment MD from stats + template")
-    parser.add_argument("--stats", default=os.path.join(SCRIPT_DIR, "stats.json"),
-                        help="Path to stats.json (default: impact-data/stats.json)")
-    parser.add_argument("--template", default=os.path.join(SCRIPT_DIR, "impact-assessment.md.template"),
-                        help="Path to template (default: impact-data/impact-assessment.md.template)")
-    parser.add_argument("--output", default=os.path.join(SCRIPT_DIR, "..", "rehor-impact-assessment-generated.md"),
-                        help="Output MD path (default: rehor-impact-assessment-generated.md)")
+    parser.add_argument(
+        "--stats",
+        default=os.path.join(SCRIPT_DIR, "stats.json"),
+        help="Path to stats.json (default: impact-data/stats.json)",
+    )
+    parser.add_argument(
+        "--template",
+        default=os.path.join(SCRIPT_DIR, "impact-assessment.md.template"),
+        help="Path to template (default: impact-data/impact-assessment.md.template)",
+    )
+    parser.add_argument(
+        "--output",
+        default=os.path.join(SCRIPT_DIR, "..", "rehor-impact-assessment-generated.md"),
+        help="Output MD path (default: rehor-impact-assessment-generated.md)",
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.stats):
@@ -184,9 +188,12 @@ def main():
         f.write(output)
 
     print(f"Generated: {args.output}", file=sys.stderr)
-    print(f"  {stats.get('total_tickets', '?')} tickets, "
-          f"{stats.get('total_prmrs', '?')} PR/MRs, "
-          f"{stats.get('unique_repos', '?')} repos", file=sys.stderr)
+    print(
+        f"  {stats.get('total_tickets', '?')} tickets, "
+        f"{stats.get('total_prmrs', '?')} PR/MRs, "
+        f"{stats.get('unique_repos', '?')} repos",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

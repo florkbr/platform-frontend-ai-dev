@@ -57,12 +57,16 @@ GH_PAGE_SIZE = 100
 # CLI helpers
 # ---------------------------------------------------------------------------
 
+
 def run_cli(cmd, retries=3):
     """Run a CLI command, return parsed JSON or None on failure."""
     for attempt in range(retries):
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=60,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
             if result.returncode == 0:
                 return json.loads(result.stdout) if result.stdout.strip() else None
@@ -85,15 +89,20 @@ def check_cli(name, check_cmd):
     """Verify a CLI tool is installed and authenticated."""
     try:
         result = subprocess.run(
-            check_cmd, capture_output=True, text=True, timeout=10,
+            check_cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
 
+
 # ---------------------------------------------------------------------------
 # Jira HTTP helpers
 # ---------------------------------------------------------------------------
+
 
 def jira_headers():
     headers = {"Accept": "application/json"}
@@ -144,9 +153,11 @@ def jira_get(url, retries=3, backoff=2):
     print(f"  FAILED after {retries} retries: {url}", file=sys.stderr)
     return None
 
+
 # ---------------------------------------------------------------------------
 # ADF (Atlassian Document Format) → plain text
 # ---------------------------------------------------------------------------
+
 
 def flatten_adf(node):
     """Recursively extract plain text and link URLs from an ADF document."""
@@ -176,6 +187,7 @@ def flatten_adf(node):
 
     return "".join(parts)
 
+
 # ---------------------------------------------------------------------------
 # Link extraction regexes
 # ---------------------------------------------------------------------------
@@ -203,9 +215,11 @@ def extract_links_from_comments(comments):
                 gl_mrs.append(url_clean)
     return gh_prs, gl_mrs
 
+
 # ---------------------------------------------------------------------------
 # Jira: fetch tickets + comments in one pass
 # ---------------------------------------------------------------------------
+
 
 def fetch_all_tickets_with_comments():
     """Paginate through Jira search, returning tickets and comment links.
@@ -225,11 +239,7 @@ def fetch_all_tickets_with_comments():
     next_token = None
 
     while True:
-        url = (
-            f"{JIRA_URL}/rest/api/3/search/jql"
-            f"?jql={jql}&fields={fields}"
-            f"&maxResults={JIRA_PAGE_SIZE}"
-        )
+        url = f"{JIRA_URL}/rest/api/3/search/jql?jql={jql}&fields={fields}&maxResults={JIRA_PAGE_SIZE}"
         if next_token:
             url += f"&nextPageToken={urllib.parse.quote(next_token)}"
 
@@ -240,13 +250,15 @@ def fetch_all_tickets_with_comments():
 
         for issue in data.get("issues", []):
             f = issue["fields"]
-            tickets.append({
-                "key": issue["key"],
-                "summary": f.get("summary", ""),
-                "status": f.get("status", {}).get("name", ""),
-                "type": f.get("issuetype", {}).get("name", ""),
-                "labels": f.get("labels", []),
-            })
+            tickets.append(
+                {
+                    "key": issue["key"],
+                    "summary": f.get("summary", ""),
+                    "status": f.get("status", {}).get("name", ""),
+                    "type": f.get("issuetype", {}).get("name", ""),
+                    "labels": f.get("labels", []),
+                }
+            )
 
             comment_field = f.get("comment", {})
             comments = comment_field.get("comments", [])
@@ -262,8 +274,7 @@ def fetch_all_tickets_with_comments():
 
         total = data.get("total", len(tickets))
         print(
-            f"  Fetched {len(tickets)}/{total} tickets "
-            f"({has_links} with PR/MR links)",
+            f"  Fetched {len(tickets)}/{total} tickets ({has_links} with PR/MR links)",
             file=sys.stderr,
         )
 
@@ -274,15 +285,11 @@ def fetch_all_tickets_with_comments():
     # Fetch full comments for tickets that had more than the inline limit
     if overflow_keys:
         print(
-            f"  Fetching full comments for {len(overflow_keys)} tickets "
-            f"with >20 comments...",
+            f"  Fetching full comments for {len(overflow_keys)} tickets with >20 comments...",
             file=sys.stderr,
         )
         for key in overflow_keys:
-            url = (
-                f"{JIRA_URL}/rest/api/3/issue/{key}/comment"
-                f"?maxResults=100"
-            )
+            url = f"{JIRA_URL}/rest/api/3/issue/{key}/comment?maxResults=100"
             data = jira_get(url)
             if not data:
                 continue
@@ -300,9 +307,11 @@ def fetch_all_tickets_with_comments():
 
     return tickets, comment_links
 
+
 # ---------------------------------------------------------------------------
 # GitHub: search PRs by author using gh CLI
 # ---------------------------------------------------------------------------
+
 
 def search_github_prs():
     """Search all PRs by the bot user using gh api."""
@@ -312,7 +321,8 @@ def search_github_prs():
     while True:
         q = f"author:{GH_BOT_USER} type:pr"
         cmd = [
-            "gh", "api",
+            "gh",
+            "api",
             f"/search/issues?q={urllib.parse.quote(q)}&per_page={GH_PAGE_SIZE}&page={page}",
         ]
         data = run_cli(cmd)
@@ -327,15 +337,17 @@ def search_github_prs():
             repo_url = item.get("repository_url", "")
             repo = "/".join(repo_url.split("/")[-2:]) if repo_url else ""
             pr_meta = item.get("pull_request", {}) or {}
-            all_prs.append({
-                "url": item.get("html_url", ""),
-                "repo": repo,
-                "state": item.get("state", ""),
-                "title": item.get("title", ""),
-                "body": item.get("body", "") or "",
-                "created_at": item.get("created_at", ""),
-                "merged_at": pr_meta.get("merged_at"),
-            })
+            all_prs.append(
+                {
+                    "url": item.get("html_url", ""),
+                    "repo": repo,
+                    "state": item.get("state", ""),
+                    "title": item.get("title", ""),
+                    "body": item.get("body", "") or "",
+                    "created_at": item.get("created_at", ""),
+                    "merged_at": pr_meta.get("merged_at"),
+                }
+            )
 
         total = data.get("total_count", 0)
         print(
@@ -358,16 +370,20 @@ def match_prs_to_tickets(prs):
         text = f"{pr['title']} {pr['body']}"
         keys = set(TICKET_KEY_RE.findall(text))
         for key in keys:
-            ticket_map.setdefault(key, []).append({
-                "url": pr["url"],
-                "repo": pr["repo"],
-                "state": pr["state"],
-            })
+            ticket_map.setdefault(key, []).append(
+                {
+                    "url": pr["url"],
+                    "repo": pr["repo"],
+                    "state": pr["state"],
+                }
+            )
     return ticket_map
+
 
 # ---------------------------------------------------------------------------
 # Helpers for label parsing
 # ---------------------------------------------------------------------------
+
 
 def get_repo_labels(labels):
     return [l[5:] for l in labels if l.startswith("repo:")]
@@ -379,9 +395,11 @@ def get_bot_label(labels):
             return l
     return ""
 
+
 # ---------------------------------------------------------------------------
 # CSV output
 # ---------------------------------------------------------------------------
+
 
 def write_csv(tickets, pr_map, comment_links, output_path):
     """Merge all data sources and write CSV."""
@@ -390,12 +408,20 @@ def write_csv(tickets, pr_map, comment_links, output_path):
 
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "Ticket Key", "Summary", "Status", "Type",
-            "Bot Instance", "Target Repo(s)",
-            "GitHub PRs", "GitLab MRs",
-            "Jira Link", "PR Search Link",
-        ])
+        writer.writerow(
+            [
+                "Ticket Key",
+                "Summary",
+                "Status",
+                "Type",
+                "Bot Instance",
+                "Target Repo(s)",
+                "GitHub PRs",
+                "GitLab MRs",
+                "Jira Link",
+                "PR Search Link",
+            ]
+        )
 
         for ticket in tickets:
             key = ticket["key"]
@@ -425,29 +451,30 @@ def write_csv(tickets, pr_map, comment_links, output_path):
                 with_mrs += 1
 
             jira_link = f"https://issues.redhat.com/browse/{key}"
-            pr_search = (
-                f"https://github.com/search?q={key}"
-                f"+type%3Apr&type=pullrequests"
+            pr_search = f"https://github.com/search?q={key}+type%3Apr&type=pullrequests"
+
+            writer.writerow(
+                [
+                    key,
+                    ticket["summary"][:120],
+                    ticket["status"],
+                    ticket["type"],
+                    bot,
+                    " | ".join(repos),
+                    " | ".join(gh_prs),
+                    " | ".join(gl_mrs),
+                    jira_link,
+                    pr_search,
+                ]
             )
 
-            writer.writerow([
-                key,
-                ticket["summary"][:120],
-                ticket["status"],
-                ticket["type"],
-                bot,
-                " | ".join(repos),
-                " | ".join(gh_prs),
-                " | ".join(gl_mrs),
-                jira_link,
-                pr_search,
-            ])
-
     return with_prs, with_mrs
+
 
 # ---------------------------------------------------------------------------
 # Summary stats
 # ---------------------------------------------------------------------------
+
 
 def print_summary(tickets, pr_map, comment_links, with_prs, with_mrs):
     all_gh = set()
@@ -481,6 +508,7 @@ def print_summary(tickets, pr_map, comment_links, with_prs, with_mrs):
     print(f"  Output:                 {OUTPUT_FILE}", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
 
+
 # ---------------------------------------------------------------------------
 # PR category classification
 # ---------------------------------------------------------------------------
@@ -495,8 +523,7 @@ def classify_pr(title):
         return "Documentation"
     if t.startswith("refactor(") or t.startswith("refactor:"):
         return "Refactoring"
-    if (t.startswith("ci(") or t.startswith("ci:") or
-            t.startswith("build(") or t.startswith("build:")):
+    if t.startswith("ci(") or t.startswith("ci:") or t.startswith("build(") or t.startswith("build:"):
         return "CI/CD improvements"
     if t.startswith("chore(deps") or t.startswith("chore(renovate"):
         return "Dependency updates"
@@ -529,6 +556,7 @@ CATEGORY_ORDER = [
 # ---------------------------------------------------------------------------
 # Stats computation for report generation
 # ---------------------------------------------------------------------------
+
 
 def compute_stats(tickets, pr_map, comment_links, gh_prs, with_prs, with_mrs):
     """Compute all aggregate stats needed by the report template."""
@@ -595,8 +623,7 @@ def compute_stats(tickets, pr_map, comment_links, gh_prs, with_prs, with_mrs):
     ticket_types = sorted(type_counts.items(), key=lambda x: -x[1])
 
     # --- Bot labels ---
-    bot_labels = sorted({l for t in tickets for l in t["labels"]
-                         if l.startswith("hcc-ai-")})
+    bot_labels = sorted({l for t in tickets for l in t["labels"] if l.startswith("hcc-ai-")})
 
     # --- Timeline ---
     first_pr_date = None
@@ -609,8 +636,7 @@ def compute_stats(tickets, pr_map, comment_links, gh_prs, with_prs, with_mrs):
         created = pr.get("created_at", "")
         if created:
             try:
-                pr_dates.append(datetime.fromisoformat(
-                    created.replace("Z", "+00:00")).date())
+                pr_dates.append(datetime.fromisoformat(created.replace("Z", "+00:00")).date())
             except (ValueError, TypeError):
                 pass
     if pr_dates:
@@ -643,10 +669,7 @@ def compute_stats(tickets, pr_map, comment_links, gh_prs, with_prs, with_mrs):
         "period_days": period_days,
         "ticket_types": [{"type": t, "count": c} for t, c in ticket_types],
         "pr_categories": pr_categories,
-        "top_repos": [
-            {"repo": full, "url": f"https://github.com/{full}", "count": c}
-            for full, c in top_repos
-        ],
+        "top_repos": [{"repo": full, "url": f"https://github.com/{full}", "count": c} for full, c in top_repos],
         "orgs": [
             {
                 "org": org,
@@ -667,9 +690,11 @@ def write_stats_json(stats, output_dir):
         json.dump(stats, f, indent=2)
     print(f"  Stats written to {path}", file=sys.stderr)
 
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     if not JIRA_TOKEN:
@@ -691,8 +716,7 @@ def main():
     print("Step 1/3: Fetching Jira tickets with comments...", file=sys.stderr)
     tickets, comment_links = fetch_all_tickets_with_comments()
     print(
-        f"  -> {len(tickets)} tickets, "
-        f"{len(comment_links)} with PR/MR links in comments\n",
+        f"  -> {len(tickets)} tickets, {len(comment_links)} with PR/MR links in comments\n",
         file=sys.stderr,
     )
 
@@ -701,8 +725,7 @@ def main():
     gh_prs = search_github_prs()
     pr_map = match_prs_to_tickets(gh_prs)
     print(
-        f"  -> {len(gh_prs)} PRs found, "
-        f"{len(pr_map)} matched to tickets\n",
+        f"  -> {len(gh_prs)} PRs found, {len(pr_map)} matched to tickets\n",
         file=sys.stderr,
     )
 
