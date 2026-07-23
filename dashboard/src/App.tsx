@@ -83,8 +83,16 @@ function InstanceScoped() {
 function AppInner() {
   const [stats, setStats] = useState<{ tasks: number; memories: number }>({ tasks: 0, memories: 0 });
   const [instances, setInstances] = useState<BotInstance[]>([]);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+  });
   const { connected, onEvent } = useWS();
   const location = useLocation();
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const instanceMatch = location.pathname.match(/\/instances\/([^/]+)/);
   const currentInstanceId = instanceMatch ? decodeURIComponent(instanceMatch[1]) : undefined;
@@ -147,6 +155,13 @@ function AppInner() {
             <span className="stat">{stats.tasks} tasks</span>
             <span className="stat">{stats.memories} memories</span>
           </div>
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          >
+            {theme === 'dark' ? '☀' : '☽'}
+          </button>
           <span className={`ws-dot ${connected ? 'connected' : ''}`} title={connected ? 'Connected' : 'Disconnected'} />
         </div>
       </header>

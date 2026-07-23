@@ -277,7 +277,7 @@ spec:
               sleep 2
             done
 
-            pip install --quiet asyncpg pytest pytest-asyncio
+            pip install --quiet ".[test]"
             JIRA_URL=https://redhat.atlassian.net \
             PGSQL_HOSTNAME=$(params.PGSQL_HOSTNAME) \
             PGSQL_PORT=$(params.PGSQL_PORT) \

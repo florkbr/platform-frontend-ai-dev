@@ -55,6 +55,7 @@ select = ["E", "W", "F", "I", "B", "C4"]
 
 [tool.ruff.lint.per-file-ignores]
 "*/tests/*" = ["E501"]
+"memory-server/seed_from_json.py" = ["E501"]
 
 [tool.uv.workspace]
 members = ["memory-server"]
