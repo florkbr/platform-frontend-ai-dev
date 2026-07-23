@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Task } from '../types';
-import { fetchTasks, deleteTask } from '../api';
+import { fetchTasks, deleteTask, pauseTask, unpauseTask } from '../api';
 import { useWS } from '../hooks/useWebSocket';
 import TaskCard from '../components/TaskCard';
 import DetailPanel from '../components/DetailPanel';
 import Pagination from '../components/Pagination';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All' },
@@ -17,12 +18,20 @@ const STATUS_OPTIONS = [
 
 const LIMIT = 20;
 
+type DialogState =
+  | { action: 'pause'; key: string }
+  | { action: 'unpause'; key: string }
+  | { action: 'archive'; key: string }
+  | null;
+
 export default function Tasks({ instanceId }: { instanceId?: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState('');
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<Task | null>(null);
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const { onEvent } = useWS();
 
@@ -50,10 +59,66 @@ export default function Tasks({ instanceId }: { instanceId?: string }) {
     });
   }, [onEvent, load]);
 
-  const handleDelete = async (key: string) => {
-    await deleteTask(key);
-    setSelected(null);
-    load();
+  const runAction = async (action: () => Promise<Response>) => {
+    const res = await action();
+    if (!res.ok) {
+      let msg = `Request failed (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body?.error) msg = body.error;
+      } catch { /* ignore non-JSON */ }
+      setError(msg);
+      return false;
+    }
+    return true;
+  };
+
+  const handleDialogConfirm = async (inputValue?: string) => {
+    if (!dialog) return;
+    let ok = false;
+    switch (dialog.action) {
+      case 'pause':
+        ok = await runAction(() => pauseTask(dialog.key, inputValue?.trim() || undefined));
+        break;
+      case 'unpause':
+        ok = await runAction(() => unpauseTask(dialog.key));
+        break;
+      case 'archive':
+        ok = await runAction(() => deleteTask(dialog.key));
+        break;
+    }
+    setDialog(null);
+    if (ok) {
+      setSelected(null);
+      load();
+    }
+  };
+
+  const dialogProps = () => {
+    if (!dialog) return { title: '', message: '' };
+    switch (dialog.action) {
+      case 'pause':
+        return {
+          title: 'Pause task',
+          message: `Pause ${dialog.key}? The bot will skip it until unpaused.`,
+          confirmLabel: 'Pause',
+          inputLabel: 'Reason (optional)',
+          inputPlaceholder: 'e.g. Waiting for design review',
+        };
+      case 'unpause':
+        return {
+          title: 'Unpause task',
+          message: `Unpause ${dialog.key}? The bot may pick it up again.`,
+          confirmLabel: 'Unpause',
+        };
+      case 'archive':
+        return {
+          title: 'Archive task',
+          message: `Archive ${dialog.key}? The bot will stop tracking it.`,
+          confirmLabel: 'Archive',
+          variant: 'danger' as const,
+        };
+    }
   };
 
   return (
@@ -85,10 +150,26 @@ export default function Tasks({ instanceId }: { instanceId?: string }) {
             type="task"
             task={selected}
             onClose={() => setSelected(null)}
-            onDelete={handleDelete}
+            onDelete={(key) => setDialog({ action: 'archive', key })}
+            onPause={(key) => setDialog({ action: 'pause', key })}
+            onUnpause={(key) => setDialog({ action: 'unpause', key })}
           />
         </div>
       )}
+      <ConfirmDialog
+        open={dialog !== null}
+        onCancel={() => setDialog(null)}
+        onConfirm={handleDialogConfirm}
+        {...dialogProps()}
+      />
+      <ConfirmDialog
+        open={error !== null}
+        title="Error"
+        message={error || ''}
+        confirmLabel="OK"
+        onConfirm={() => setError(null)}
+        onCancel={() => setError(null)}
+      />
     </div>
   );
 }
