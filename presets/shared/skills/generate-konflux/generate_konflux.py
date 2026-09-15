@@ -144,8 +144,11 @@ def _tenant_kustomization(tenant, rbac_files, app_dirs):
     )
 
 
-def _application_yaml(instance_name, tenant=None):
+def _application_yaml(instance_name, tenant=None, application=None):
     ns = f"  namespace: {tenant}\n" if tenant else ""
+    application = application or {}
+    single_component = application.get("singleComponentMode", application.get("single_component_mode"))
+    single_component_yaml = f"  singleComponentMode: {'true' if single_component else 'false'}\n" if single_component is not None else ""
     return (
         "---\n"
         "apiVersion: appstudio.redhat.com/v1alpha1\n"
@@ -155,10 +158,11 @@ def _application_yaml(instance_name, tenant=None):
         f"{ns}"
         "spec:\n"
         f"  displayName: {instance_name}\n"
+        f"{single_component_yaml}"
     )
 
 
-def _component_yaml(instance_name, repo_url, dockerfile, target_branch, tenant=None):
+def _component_yaml(instance_name, repo_url, dockerfile, target_branch, tenant=None, pipeline="docker-build"):
     ns = f"  namespace: {tenant}\n" if tenant else ""
     return (
         "---\n"
@@ -169,7 +173,7 @@ def _component_yaml(instance_name, repo_url, dockerfile, target_branch, tenant=N
         f"{ns}"
         "  annotations:\n"
         "    build.appstudio.openshift.io/request: configure-pac\n"
-        '    build.appstudio.openshift.io/pipeline: \'{"name":"docker-build","bundle":"latest"}\'\n'
+        f'    build.appstudio.openshift.io/pipeline: \'{{"name":"{pipeline}","bundle":"latest"}}\'\n'
         "spec:\n"
         f"  application: {instance_name}\n"
         f"  componentName: {instance_name}\n"
@@ -182,8 +186,12 @@ def _component_yaml(instance_name, repo_url, dockerfile, target_branch, tenant=N
     )
 
 
-def _image_repository_yaml(instance_name, quay_org, tenant=None):
+def _image_repository_yaml(instance_name, quay_org, tenant=None, image_name=None, pyxis=None):
     ns = f"  namespace: {tenant}\n" if tenant else ""
+    image_name = image_name or f"{quay_org}/{instance_name}"
+    pyxis_yaml = ""
+    if pyxis:
+        pyxis_yaml = "  pyxis:\n" + "\n".join(f"    {key}: {value}" for key, value in pyxis.items()) + "\n"
     return (
         "---\n"
         "apiVersion: appstudio.redhat.com/v1alpha1\n"
@@ -198,8 +206,9 @@ def _image_repository_yaml(instance_name, quay_org, tenant=None):
         f"    appstudio.redhat.com/component: {instance_name}\n"
         "spec:\n"
         "  image:\n"
-        f"    name: {quay_org}/{instance_name}\n"
+        f"    name: {image_name}\n"
         "    visibility: public\n"
+        f"{pyxis_yaml}"
         "  notifications:\n"
         "    - config:\n"
         "        url: https://bombino.api.redhat.com/v1/sbom/quay/push\n"
@@ -209,7 +218,7 @@ def _image_repository_yaml(instance_name, quay_org, tenant=None):
     )
 
 
-def _release_plan_yaml(instance_name, tenant=None):
+def _release_plan_yaml(instance_name, tenant=None, release_target="rhtap-releng-tenant"):
     ns = f"  namespace: {tenant}\n" if tenant else ""
     return (
         "---\n"
@@ -224,12 +233,14 @@ def _release_plan_yaml(instance_name, tenant=None):
         f"{ns}"
         "spec:\n"
         f"  application: {instance_name}\n"
-        "  target: rhtap-releng-tenant\n"
+        f"  target: {release_target}\n"
     )
 
 
-def _integration_test_yaml(instance_name, tenant=None):
+def _integration_test_yaml(instance_name, tenant=None, integration=None):
     ns = f"  namespace: {tenant}\n" if tenant else ""
+    integration = integration or {}
+    resolver = integration.get("resolver", {})
     return (
         "---\n"
         "apiVersion: appstudio.redhat.com/v1beta2\n"
@@ -244,15 +255,15 @@ def _integration_test_yaml(instance_name, tenant=None):
         "      name: application\n"
         "  params:\n"
         "    - name: POLICY_CONFIGURATION\n"
-        "      value: rhtap-releng-tenant/app-interface-standard\n"
+         f"      value: {integration.get('policy_configuration', 'rhtap-releng-tenant/app-interface-standard')}\n"
         "  resolverRef:\n"
         "    params:\n"
         "      - name: url\n"
-        "        value: https://github.com/konflux-ci/build-definitions\n"
+         f"        value: {resolver.get('url', 'https://github.com/konflux-ci/build-definitions')}\n"
         "      - name: revision\n"
-        "        value: main\n"
+         f"        value: {resolver.get('revision', 'main')}\n"
         "      - name: pathInRepo\n"
-        "        value: pipelines/enterprise-contract.yaml\n"
+         f"        value: {resolver.get('path', 'pipelines/enterprise-contract.yaml')}\n"
         "    resolver: git\n"
     )
 
@@ -272,7 +283,16 @@ def _app_kustomization(tenant, instance_name):
     )
 
 
-def _rpa_yaml(service_name, instance_name, tenant, quay_org, service_account):
+def _rpa_yaml(service_name, instance_name, tenant, quay_org, service_account, release=None, image_name=None):
+    release = release or {}
+    image_name = image_name or f"{quay_org}/{instance_name}"
+    tag_rules = release.get("tag_rules", {})
+    tags = release.get("tags")
+    if tags is None and tag_rules:
+        template = tag_rules.get("template", "sc-{{ timestamp }}-{{ git_short_sha }}")
+        tags = [f'"{template}"']
+    tags = tags or ["latest", '"{{ git_sha }}"', '"{{ git_short_sha }}"', '"{{ digest_sha }}"']
+    tag_lines = "\n".join(f"                - {tag}" for tag in tags)
     return (
         "---\n"
         "apiVersion: appstudio.redhat.com/v1alpha1\n"
@@ -282,26 +302,24 @@ def _rpa_yaml(service_name, instance_name, tenant, quay_org, service_account):
         '    release.appstudio.openshift.io/block-releases: "false"\n'
         "    pp.engineering.redhat.com/business-unit: other\n"
         f"  name: {instance_name}\n"
-        "  namespace: rhtap-releng-tenant\n"
+         f"  namespace: {release.get('target', 'rhtap-releng-tenant')}\n"
         "spec:\n"
         "  applications:\n"
         f"    - {instance_name}\n"
         f"  origin: {tenant}\n"
-        "  policy: app-interface-standard\n"
+         f"  policy: {release.get('policy', 'app-interface-standard')}\n"
         "  data:\n"
-        "    releaseNotes:\n"
-        f"      product_name: {instance_name}\n"
-        "      product_version: 1.0.0\n"
-        "    mapping:\n"
+         "    releaseNotes:\n"
+         f"      product_name: {instance_name}\n"
+         f"      product_version: {release.get('product_version', '1.0.0')}\n"
+         + (f"      timestampFormat: {tag_rules['timestampFormat']}\n" if "timestampFormat" in tag_rules else "")
+         + "    mapping:\n"
         "      components:\n"
         f"        - name: {instance_name}\n"
         "          repositories:\n"
-        f'            - url: "quay.io/redhat-services-prod/{quay_org}/{instance_name}"\n'
+         f'            - url: "quay.io/redhat-services-prod/{image_name}"\n'
         "              tags:\n"
-        "                - latest\n"
-        '                - "{{ git_sha }}"\n'
-        '                - "{{ git_short_sha }}"\n'
-        '                - "{{ digest_sha }}"\n'
+         f"{tag_lines}\n"
         "          public: true\n"
         "          pushSourceContainer: false\n"
         "      registrySecret: konflux-release-service-access-management-token\n"
@@ -323,7 +341,9 @@ def _rpa_yaml(service_name, instance_name, tenant, quay_org, service_account):
     )
 
 
-def _constraints_yaml(service_name, tenant, quay_org, service_account, instance_name=None):
+def _constraints_yaml(service_name, tenant, quay_org, service_account, instance_name=None, release=None, image_name=None):
+    release = release or {}
+    image_name = image_name or f"{quay_org}/{instance_name or service_name}"
     tenant_re = re.escape(tenant)
     quay_org_re = re.escape(quay_org)
     instance_re = re.escape(instance_name or service_name)
@@ -341,7 +361,7 @@ def _constraints_yaml(service_name, tenant, quay_org, service_account, instance_
         "        type: string\n"
         f"        pattern: ^{tenant_re}$\n"
         "      policy:\n"
-        "        pattern: ^app-interface-standard$\n"
+         f"        pattern: ^{re.escape(release.get('policy', 'app-interface-standard'))}$\n"
         "      data:\n"
         "        properties:\n"
         "          mapping:\n"
@@ -356,7 +376,7 @@ def _constraints_yaml(service_name, tenant, quay_org, service_account, instance_
         "                        properties:\n"
         "                          url:\n"
         "                            type: string\n"
-        f"                            pattern: ^quay\\.io/redhat-services-prod/{quay_org_re}/{instance_re}.*\n"
+         f"                            pattern: ^quay\\.io/redhat-services-prod/{re.escape(image_name)}.*\n"
         "      pipeline:\n"
         "        properties:\n"
         "          pipelineRef:\n"
@@ -452,13 +472,20 @@ def generate(cfg, repo_path):
         (instance_name, "instance_name"),
     ]:
         _validate_name(name, field)
-    dockerfile = cfg.get("dockerfile", "dev-bot/Dockerfile.runner")
-    target_branch = cfg.get("target_branch", "main")
+    component = cfg.get("component", {})
+    dockerfile = cfg.get("dockerfile", component.get("dockerfile", "dev-bot/Dockerfile.runner"))
+    target_branch = cfg.get("target_branch", component.get("target_branch", "main"))
+    pipeline = cfg.get("pipeline", component.get("pipeline", "docker-build"))
+    integration = cfg.get("integration_test", {})
+    release = cfg.get("release", {})
+    application = cfg.get("application", {})
+    pyxis = cfg.get("pyxis", cfg.get("image", {}).get("pyxis"))
     admins = cfg.get("admins", [])
     maintainers = cfg.get("maintainers", [])
     cost_center = cfg.get("cost_center", "")
     quota_tier = cfg.get("quota_tier", "1.small")
     quay_org = cfg["quay_org"]
+    image_name = cfg.get("image_name", cfg.get("image", {}).get("name", f"{quay_org}/{instance_name}"))
     service_name = cfg.get("service_name", tenant.removesuffix("-tenant"))
 
     for name, field in [(quay_org, "quay_org"), (service_name, "service_name")]:
@@ -536,12 +563,12 @@ def generate(cfg, repo_path):
         comp_dir = app_dir / instance_name
         comp_dir.mkdir(parents=True, exist_ok=True)
 
-        (app_dir / "application.yaml").write_text(_application_yaml(instance_name))
-        (app_dir / "release-plan.yaml").write_text(_release_plan_yaml(instance_name))
-        (app_dir / "integration-test-scenario.yaml").write_text(_integration_test_yaml(instance_name))
+        (app_dir / "application.yaml").write_text(_application_yaml(instance_name, application=application))
+        (app_dir / "release-plan.yaml").write_text(_release_plan_yaml(instance_name, release_target=release.get("target", "rhtap-releng-tenant")))
+        (app_dir / "integration-test-scenario.yaml").write_text(_integration_test_yaml(instance_name, integration=integration))
         (app_dir / "kustomization.yaml").write_text(_app_kustomization(tenant, instance_name))
-        (comp_dir / "component.yaml").write_text(_component_yaml(instance_name, repo_url, dockerfile, target_branch))
-        (comp_dir / "image-repository.yaml").write_text(_image_repository_yaml(instance_name, quay_org))
+        (comp_dir / "component.yaml").write_text(_component_yaml(instance_name, repo_url, dockerfile, target_branch, pipeline=pipeline))
+        (comp_dir / "image-repository.yaml").write_text(_image_repository_yaml(instance_name, quay_org, image_name=image_name, pyxis=pyxis))
         files_written.extend(
             [
                 str((app_dir / f).relative_to(root))
@@ -563,8 +590,8 @@ def generate(cfg, repo_path):
             ]
         )
     else:
-        combined = _application_yaml(instance_name, tenant) + _component_yaml(
-            instance_name, repo_url, dockerfile, target_branch, tenant
+        combined = _application_yaml(instance_name, tenant, application) + _component_yaml(
+            instance_name, repo_url, dockerfile, target_branch, tenant, pipeline=pipeline
         )
         new_files = [
             f"{instance_name}.yaml",
@@ -573,9 +600,9 @@ def generate(cfg, repo_path):
             f"{instance_name}.enterprise-contract.integrationtestscenario.yaml",
         ]
         (tenant_dir / new_files[0]).write_text(combined)
-        (tenant_dir / new_files[1]).write_text(_image_repository_yaml(instance_name, quay_org, tenant))
-        (tenant_dir / new_files[2]).write_text(_release_plan_yaml(instance_name, tenant))
-        (tenant_dir / new_files[3]).write_text(_integration_test_yaml(instance_name, tenant))
+        (tenant_dir / new_files[1]).write_text(_image_repository_yaml(instance_name, quay_org, tenant, image_name, pyxis))
+        (tenant_dir / new_files[2]).write_text(_release_plan_yaml(instance_name, tenant, release.get("target", "rhtap-releng-tenant")))
+        (tenant_dir / new_files[3]).write_text(_integration_test_yaml(instance_name, tenant, integration))
         files_written.extend([str((tenant_dir / f).relative_to(root)) for f in new_files])
 
         kustom_path = tenant_dir / "kustomization.yaml"
@@ -610,7 +637,7 @@ def generate(cfg, repo_path):
     rpa_dir = root / "config" / cluster_suffix / "service" / "ReleasePlanAdmission" / service_name
     rpa_dir.mkdir(parents=True, exist_ok=True)
     (rpa_dir / f"{instance_name}.yaml").write_text(
-        _rpa_yaml(service_name, instance_name, tenant, quay_org, service_account)
+        _rpa_yaml(service_name, instance_name, tenant, quay_org, service_account, release, image_name)
     )
     files_written.append(str((rpa_dir / f"{instance_name}.yaml").relative_to(root)))
 
@@ -618,7 +645,7 @@ def generate(cfg, repo_path):
         constraints_dir = root / "constraints" / "service"
         constraints_dir.mkdir(parents=True, exist_ok=True)
         (constraints_dir / f"{service_name}.yaml").write_text(
-            _constraints_yaml(service_name, tenant, quay_org, service_account, instance_name)
+            _constraints_yaml(service_name, tenant, quay_org, service_account, instance_name, release, image_name)
         )
         files_written.append(str((constraints_dir / f"{service_name}.yaml").relative_to(root)))
 

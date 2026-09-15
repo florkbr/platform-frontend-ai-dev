@@ -75,10 +75,11 @@ def _build_resource_template(cfg, namespace_ref):
     workflow = cfg.get("workflow", "jira-sprint")
     slack_webhook_url = cfg.get("slack_webhook_url", "")
 
-    gcp_project_id = cfg["gcp_project_id"]
+    gcp_project_id = cfg.get("gcp_project_id", "")
     gcp_region = cfg.get("gcp_region", "global")
     vertex_models = cfg.get("vertex_allowed_models", "claude-sonnet-4-6,claude-opus-4-6,claude-haiku-4-5")
 
+    custom_params = cfg.get("resource_template_parameters", cfg.get("resourceTemplateParameters"))
     params = [
         f"      BOT_IMAGE: quay.io/redhat-services-prod/{quay_org}/{instance_name}",
         "      BOT_REPLICAS: '0'",
@@ -86,7 +87,10 @@ def _build_resource_template(cfg, namespace_ref):
         f"      BOT_LABEL: {_yaml_quote(bot_label)}",
     ]
 
-    if workflow == "jira-sprint":
+    if custom_params is not None:
+        params = [f"      {key}: {_yaml_quote(value)}" for key, value in custom_params.items()]
+
+    if custom_params is None and workflow == "jira-sprint":
         board_name = cfg.get("board_name", "")
         sprint_prefix = cfg.get("sprint_prefix", "")
         include_backlog = cfg.get("include_backlog", "false")
@@ -95,7 +99,7 @@ def _build_resource_template(cfg, namespace_ref):
         if sprint_prefix:
             params.append(f"      BOT_SPRINT_PREFIX: {_yaml_quote(sprint_prefix)}")
         params.append(f"      BOT_INCLUDE_BACKLOG: '{include_backlog}'")
-    elif workflow == "jira-kanban":
+    elif custom_params is None and workflow == "jira-kanban":
         board_name = cfg.get("board_name", "")
         jira_project = cfg.get("jira_project", "")
         if board_name:
@@ -103,32 +107,78 @@ def _build_resource_template(cfg, namespace_ref):
         if jira_project:
             params.append(f"      BOT_JIRA_PROJECT: {_yaml_quote(jira_project)}")
 
-    params.append(f"      BOT_INSTANCE_ID: {_yaml_quote(instance_id)}")
+    if custom_params is None:
+        params.append(f"      BOT_INSTANCE_ID: {_yaml_quote(instance_id)}")
 
-    if slack_webhook_url:
+    if custom_params is None and slack_webhook_url:
         params.append(f"      SLACK_WEBHOOK_URL: {_yaml_quote(slack_webhook_url)}")
     slack_notify_mode = cfg.get("slack_notify_mode", "")
-    if slack_notify_mode:
+    if custom_params is None and slack_notify_mode:
         params.append(f"      SLACK_NOTIFY_MODE: {_yaml_quote(slack_notify_mode)}")
 
-    params.extend(
-        [
-            f"      GCP_PROJECT_ID: {_yaml_quote(gcp_project_id)}",
-            f"      GCP_REGION: {_yaml_quote(gcp_region)}",
-            f"      VERTEX_ALLOWED_MODELS: {_yaml_quote(vertex_models)}",
-            f"      BOT_CONFIG_REPO: {_yaml_quote(config_repo)}",
-            f"      BOT_CONFIG_PATH: {_yaml_quote(config_path)}",
-        ]
-    )
+    if custom_params is None:
+        params.extend(
+            [
+                f"      GCP_PROJECT_ID: {_yaml_quote(gcp_project_id)}",
+                f"      GCP_REGION: {_yaml_quote(gcp_region)}",
+                f"      VERTEX_ALLOWED_MODELS: {_yaml_quote(vertex_models)}",
+                f"      BOT_CONFIG_REPO: {_yaml_quote(config_repo)}",
+                f"      BOT_CONFIG_PATH: {_yaml_quote(config_path)}",
+            ]
+        )
 
     params_block = "\n".join(params)
 
     target_branch = cfg.get("target_branch", "main")
+    targets = cfg.get("targets")
+    target_namespaces = cfg.get("target_namespaces", cfg.get("targetNamespaces"))
+    target_refs = cfg.get("target_refs", cfg.get("targetRefs"))
+    if targets is None and target_namespaces:
+        targets = [
+            {"namespace_ref": namespace, "ref": (target_refs or {}).get(name, target_branch)}
+            for name, namespace in target_namespaces.items()
+        ] if isinstance(target_namespaces, dict) else [
+            {"namespace_ref": namespace, "ref": (target_refs or [target_branch] * len(target_namespaces))[index]}
+            for index, namespace in enumerate(target_namespaces)
+        ]
+    template_path = cfg.get("resource_template_path", cfg.get("resourceTemplatePath", "/deploy/template.yaml"))
+    if targets:
+        target_blocks = []
+        for target in targets:
+            target_namespace = target.get("namespace_ref", namespace_ref)
+            target_ref = target.get("ref", target.get("branch", target_branch))
+            target_images = target.get(
+                "images",
+                [{"org_ref": QUAY_ORG_REF, "name": cfg.get("target_image_name", cfg.get("image_reference", cfg["quay_org"] + "/" + instance_name))}],
+            )
+            image_lines = []
+            for image in target_images:
+                image_lines.extend(
+                    [
+                        "     - org:",
+                        f"         $ref: {image.get('org_ref', QUAY_ORG_REF)}",
+                        f"       name: {image['name']}",
+                    ]
+                )
+            target_blocks.append(
+                "   - namespace:\n"
+                f"       $ref: {target_namespace}\n"
+                f"     ref: {target_ref}\n"
+                "     images:\n"
+                + "\n".join(image_lines)
+                + f"\n     parameters:\n{params_block}"
+            )
+        targets_yaml = "\n".join(target_blocks)
+        return f"""- name: {instance_name}
+  path: {template_path}
+  url: {repo_url}
+  targets:
+{targets_yaml}"""
 
     ns_ref = namespace_ref
 
     return f"""- name: {instance_name}
-  path: /deploy/template.yaml
+  path: {template_path}
   url: {repo_url}
   targets:
   - namespace:
@@ -146,9 +196,24 @@ def _build_image_pattern(quay_org, instance_name):
     return f"- quay.io/redhat-services-prod/{quay_org}/{instance_name}"
 
 
+def _build_image_patterns(cfg):
+    patterns = cfg.get("image_patterns", cfg.get("imageReferences"))
+    if patterns is not None:
+        return "\n".join(f"- {pattern}" for pattern in patterns)
+    image_reference = cfg.get("image_reference")
+    if image_reference:
+        return f"- {image_reference}"
+    return _build_image_pattern(cfg["quay_org"], cfg["instance_name"])
+
+
 def _build_saas_file(cfg, instance_name, app_ref, pipelines_ref, auth_ref, image_pattern, resource_template):
     service_label = cfg.get("service_label", "platform-frontend-ai-dev")
     platform_label = cfg.get("platform_label", "insights")
+    managed_resource_types = cfg.get(
+        "managed_resource_types",
+        cfg.get("managedResourceTypes", ["Deployment", "NetworkPolicy", "ScaledObject.keda.sh"]),
+    )
+    managed_types_yaml = "\n".join(f"- {item}" for item in managed_resource_types)
     return f"""---
 $schema: /app-sre/saas-file-2.yml
 
@@ -158,7 +223,7 @@ labels:
 
 name: {_yaml_quote(instance_name)}
 displayName: {_yaml_quote(instance_name)}
-description: {_yaml_quote("Rehor bot instance for " + cfg.get("team_name", instance_name))}
+description: {_yaml_quote(cfg.get("description", "Rehor bot instance for " + cfg.get("team_name", instance_name)))}
 
 app:
   $ref: {app_ref}
@@ -172,9 +237,7 @@ slack:
   channel: ''
 
 managedResourceTypes:
-- Deployment
-- NetworkPolicy
-- ScaledObject.keda.sh
+{managed_types_yaml}
 
 imagePatterns:
 {image_pattern}
@@ -200,14 +263,14 @@ def _create_shared_saas(cfg, repo_path):
     if not namespace_ref:
         return {"error": f"Could not discover namespace $ref from existing entries in {SHARED_SAAS_PATH}"}
 
-    if not cfg.get("gcp_project_id"):
+    if not cfg.get("gcp_project_id") and cfg.get("resource_template_parameters", cfg.get("resourceTemplateParameters")) is None:
         discovered = _discover_gcp_project(repo_path)
         if not discovered:
             return {"error": f"Could not discover GCP_PROJECT_ID from {SHARED_SAAS_PATH}"}
         cfg = {**cfg, "gcp_project_id": discovered}
 
     service_dir = shared_saas.parent
-    saas_path = service_dir / f"{instance_name}-deploy.yml"
+    saas_path = service_dir / cfg.get("deploy_filename", cfg.get("deployFilename", f"{instance_name}-deploy.yml"))
 
     if saas_path.exists():
         existing = saas_path.read_text()
@@ -223,7 +286,7 @@ def _create_shared_saas(cfg, repo_path):
         return {"error": f"Could not discover pipelinesProvider $ref from {SHARED_SAAS_PATH}"}
 
     resource_template = _build_resource_template(cfg, namespace_ref)
-    image_pattern = _build_image_pattern(quay_org, instance_name)
+    image_pattern = _build_image_patterns(cfg)
 
     content = _build_saas_file(cfg, instance_name, APP_REF, pipelines_ref, AUTH_REF, image_pattern, resource_template)
 
@@ -249,7 +312,7 @@ def _create_separate_saas(cfg, repo_path):
     instance_name = cfg["instance_name"]
     quay_org = cfg["quay_org"]
 
-    if "gcp_project_id" not in cfg:
+    if "gcp_project_id" not in cfg and cfg.get("resource_template_parameters", cfg.get("resourceTemplateParameters")) is None:
         raise ValueError("gcp_project_id is required for separate pattern")
 
     service_tree = cfg.get("service_tree")
@@ -261,7 +324,7 @@ def _create_separate_saas(cfg, repo_path):
         )
     saas_dir = _safe_path(Path(repo_path) / "data" / "services", service_tree)
     saas_dir.mkdir(parents=True, exist_ok=True)
-    saas_path = saas_dir / f"{instance_name}.yml"
+    saas_path = saas_dir / cfg.get("deploy_filename", cfg.get("deployFilename", f"{instance_name}.yml"))
 
     if saas_path.exists():
         existing = saas_path.read_text()
@@ -287,7 +350,7 @@ def _create_separate_saas(cfg, repo_path):
     auth_ref = cfg.get("auth_ref", AUTH_REF)
 
     resource_template = _build_resource_template(cfg, namespace_ref=namespace_ref)
-    image_pattern = _build_image_pattern(quay_org, instance_name)
+    image_pattern = _build_image_patterns(cfg)
 
     content = _build_saas_file(cfg, instance_name, app_ref, pipelines_ref, auth_ref, image_pattern, resource_template)
 
@@ -444,7 +507,7 @@ def main():
     if not cfg.get("quay_org"):
         print(json.dumps({"error": "quay_org is required"}))
         sys.exit(1)
-    if cfg.get("pattern", "shared") != "shared" and not cfg.get("gcp_project_id"):
+    if cfg.get("pattern", "shared") != "shared" and not cfg.get("gcp_project_id") and cfg.get("resource_template_parameters", cfg.get("resourceTemplateParameters")) is None:
         print(json.dumps({"error": "gcp_project_id is required for separate pattern"}))
         sys.exit(1)
 

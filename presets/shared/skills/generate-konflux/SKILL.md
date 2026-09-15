@@ -41,6 +41,30 @@ Writes files into the `<konflux_repo_path>` directory (a clone of `konflux-relea
 }
 ```
 
+The generator also accepts optional domain-neutral configuration blocks. These preserve the
+defaults above while allowing other build domains to describe their own output:
+
+```json
+{
+  "component": {"dockerfile": "build-tools/Dockerfile", "pipeline": "docker-build-oci-ta", "target_branch": "master"},
+  "image_name": "my-tenant/my-app/my-app",
+  "application": {"singleComponentMode": true},
+  "integration_test": {
+    "policy_configuration": "consoledot-frontend-standard",
+    "resolver": {"url": "https://github.com/konflux-ci/build-definitions", "revision": "main", "path": "pipelines/enterprise-contract.yaml"}
+  },
+  "release": {
+    "target": "my-team-release-tenant",
+    "policy": "consoledot-frontend-standard",
+    "tag_rules": {"template": "sc-{{ timestamp }}-{{ git_short_sha }}", "timestampFormat": "20060102-150405"}
+  },
+  "pyxis": {"enabled": "true"}
+}
+```
+
+Top-level `dockerfile`, `pipeline`, and `target_branch` remain supported as shorthand. The
+existing bot values are used whenever these options are omitted.
+
 ### Required Fields
 
 - `tenant`, `quay_org`, `instance_name`, `repo_url`

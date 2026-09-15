@@ -55,6 +55,29 @@ Creates a SaaS deploy file in the `<app_interface_repo_path>` (a clone of app-in
 }
 ```
 
+For non-bot resources, provide declarative resource settings instead of the default `BOT_*`,
+GCP, Vertex, and KEDA parameters:
+
+```json
+{
+  "managed_resource_types": ["Frontend", "Deployment"],
+  "resource_template_path": "/deploy/frontend.yaml",
+  "resource_template_parameters": {
+    "ENV_NAME": "frontends",
+    "IMAGE": "quay.io/redhat-services-prod/my-tenant/my-app"
+  },
+  "image_reference": "quay.io/redhat-services-prod/my-tenant/my-app",
+  "deploy_filename": "deploy.yml",
+  "targets": [
+    {"namespace_ref": "/services/my-team/namespaces/prod.yml", "ref": "<commit-sha>"},
+    {"namespace_ref": "/services/my-team/namespaces/stage.yml", "ref": "master"}
+  ]
+}
+```
+
+When `targets` is supplied, each target may specify `images` with `org_ref` and `name` fields.
+Without these settings, the existing bot resource template and parameters are unchanged.
+
 ### Required Fields
 
 - `instance_name`, `repo_url`, `quay_org`

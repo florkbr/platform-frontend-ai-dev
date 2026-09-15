@@ -339,6 +339,41 @@ class TestSharedPattern:
         content = self._read_shared_deploy(app_interface_repo)
         assert "ScaledObject.keda.sh" in content
 
+    def test_domain_configuration_renders_frontend_resource(self, app_interface_repo):
+        cfg = {
+            "instance_name": "frontend-app",
+            "repo_url": "https://github.com/TestOrg/frontend-app",
+            "quay_org": "team-tenant",
+            "pattern": "separate",
+            "service_tree": "team/frontends",
+            "gcp_project_id": "unused-for-frontend",
+            "namespace_ref": "/services/team/frontends/namespaces/stage.yml",
+            "pipelines_ref": "/services/team/frontends/pipelines/saas.yml",
+            "deploy_filename": "deploy.yml",
+            "description": "Frontend deployment",
+            "managed_resource_types": ["Frontend", "Deployment"],
+            "resource_template_path": "/deploy/frontend.yaml",
+            "resource_template_parameters": {
+                "ENV_NAME": "frontends",
+                "IMAGE": "quay.io/redhat-services-prod/team-tenant/frontend-app",
+            },
+            "image_reference": "quay.io/redhat-services-prod/team-tenant/frontend-app",
+            "targets": [
+                {"namespace_ref": "/services/team/frontends/namespaces/prod.yml", "ref": "abc123"},
+                {"namespace_ref": "/services/team/frontends/namespaces/stage.yml", "ref": "master"},
+            ],
+        }
+        result = generate(cfg, str(app_interface_repo))
+        content = (app_interface_repo / result["file"]).read_text()
+        assert "Frontend" in content
+        assert "path: /deploy/frontend.yaml" in content
+        assert "ENV_NAME: frontends" in content
+        assert "IMAGE: quay.io/redhat-services-prod/team-tenant/frontend-app" in content
+        assert "ref: abc123" in content
+        assert "ref: master" in content
+        assert "ScaledObject.keda.sh" not in content
+        assert content.startswith("---\n")
+
 
 class TestDuplicateGuard:
     def test_second_run_unchanged(self, app_interface_repo):

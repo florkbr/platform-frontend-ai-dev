@@ -226,6 +226,39 @@ class TestNewTenant:
         assert "test-tenant" in content
         assert "test-cluster.abcd.p1" in content
 
+    def test_domain_configuration_changes_build_and_release_outputs(self, konflux_repo):
+        cfg = {
+            **NEW_TENANT_CONFIG,
+            "instance_name": "frontend-app",
+            "service_name": "frontend",
+            "dockerfile": "build-tools/Dockerfile",
+            "pipeline": "docker-build-oci-ta",
+            "target_branch": "master",
+            "image_name": "team-tenant/frontend-app/frontend-app",
+            "application": {"singleComponentMode": True},
+            "integration_test": {
+                "policy_configuration": "consoledot-frontend-standard",
+                "resolver": {"revision": "main"},
+            },
+            "release": {
+                "target": "team-release-tenant",
+                "policy": "consoledot-frontend-standard",
+                "tag_rules": {"template": "sc-{{ timestamp }}-{{ git_short_sha }}", "timestampFormat": "20060102-150405"},
+            },
+            "pyxis": {"enabled": "true"},
+        }
+        generate(cfg, str(konflux_repo))
+        app_dir = konflux_repo / "tenants-config" / "cluster" / "test-cluster" / "tenants" / "test-tenant" / "frontend-app"
+        assert "docker-build-oci-ta" in (app_dir / "frontend-app" / "component.yaml").read_text()
+        assert "build-tools/Dockerfile" in (app_dir / "frontend-app" / "component.yaml").read_text()
+        assert "consoledot-frontend-standard" in (app_dir / "integration-test-scenario.yaml").read_text()
+        assert "sc-{{ timestamp }}-{{ git_short_sha }}" in (
+            konflux_repo / "config" / "test-cluster.abcd.p1" / "service" / "ReleasePlanAdmission" / "frontend" / "frontend-app.yaml"
+        ).read_text()
+        assert "team-tenant/frontend-app/frontend-app" in (
+            app_dir / "frontend-app" / "image-repository.yaml"
+        ).read_text()
+
 
 class TestInputSanitization:
     def test_rejects_cost_center_with_path_traversal(self, konflux_repo):
